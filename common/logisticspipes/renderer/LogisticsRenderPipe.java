@@ -53,13 +53,17 @@ public class LogisticsRenderPipe implements BlockEntityRenderer<LogisticsTileGen
 	private static final ExecutorService pool = Executors.newFixedThreadPool(1);
 	private static final int LIQUID_STAGES = 40;
 	private static final int MAX_ITEMS_TO_RENDER = 10;
-	private static final ResourceLocation SIGN = new ResourceLocation("textures/entity/sign.png");
+	private static final net.minecraft.client.resources.model.Material SIGN = net.minecraft.client.renderer.Sheets.getSignMaterial(net.minecraft.world.level.block.state.properties.WoodType.OAK);
 	public static LogisticsNewRenderPipe secondRenderer = new LogisticsNewRenderPipe();
 	public static LogisticsNewPipeItemBoxRenderer boxRenderer = new LogisticsNewPipeItemBoxRenderer();
 	public static ClientConfiguration config = LogisticsPipes.getClientPlayerConfig();
 	private static final ItemStackRenderer itemRenderer = new ItemStackRenderer(0, 0, 0, false, false);
 
+	// LP1's ModelSign without the stick
+	private final net.minecraft.client.model.geom.ModelPart signBoard;
+
 	public LogisticsRenderPipe(BlockEntityRendererProvider.Context context) {
+		signBoard = context.bakeLayer(net.minecraft.client.model.geom.ModelLayers.createSignModelName(net.minecraft.world.level.block.state.properties.WoodType.OAK)).getChild("sign");
 	}
 
 	@Override
@@ -249,6 +253,8 @@ public class LogisticsRenderPipe implements BlockEntityRenderer<LogisticsTileGen
 						(logisticspipes.proxy.object3d.impl.LPRenderStateImpl) SimpleServiceLocator.cclProxy.getRenderState();
 					rs.pose = poseStack.last().pose();
 					rs.normal = poseStack.last().normal();
+					// signs drew with other RenderTypes, which ended the batch the pipe buffer belonged to
+					rs.buffer = bufferSource.getBuffer(net.minecraft.client.renderer.RenderType.cutoutMipped());
 				}
 				// The Request Table is an isPipeBlock() pipe: LogisticsNewRenderPipe skips it and
 				// the 1.12 ISimpleBlockRenderingHandler that drew its block body was never ported,
@@ -465,7 +471,15 @@ public class LogisticsRenderPipe implements BlockEntityRenderer<LogisticsTileGen
 	}
 
 	private void renderSign(CoreRoutedPipe pipe, IPipeSign type, float partialTickTime, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
-		// ModelSign background rendering deferred; delegate text/item rendering to the sign.
+		float signScale = 2 / 3.0F;
+		poseStack.translate(0.0F, -0.3125F, -0.36F);
+		poseStack.mulPose(new org.joml.Quaternionf().rotationY((float) Math.toRadians(180)));
+		poseStack.pushPose();
+		poseStack.scale(signScale, -signScale, -signScale);
+		signBoard.render(poseStack, SIGN.buffer(bufferSource, net.minecraft.client.renderer.RenderType::entitySolid), packedLight, net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY);
+		poseStack.popPose();
+		// LP1's non-framebuffer placement; its framebuffer quad lands within 0.02 of it
+		poseStack.translate(-0.32F, 0.5F * signScale + 0.08F, 0.07F * signScale);
 		type.render(pipe, this, poseStack, bufferSource, packedLight);
 	}
 
@@ -482,13 +496,14 @@ public class LogisticsRenderPipe implements BlockEntityRenderer<LogisticsTileGen
 	public void renderItemStackOnSign(@Nonnull ItemStack itemstack, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
 		if (itemstack.isEmpty()) return;
 		poseStack.pushPose();
-		// Position the item onto the front face of the sign and scale it down to fit.
-		poseStack.translate(0.0F, 0.08F, 0.0F);
-		poseStack.scale(0.45F, 0.45F, 0.45F);
+		// LP1: flat GUI-style item on the left of the sign
+		poseStack.translate(0.05F, 0F, 0F);
+		poseStack.scale(0.8F, 0.8F, 0.001F);
+		poseStack.scale(0.4F, 0.4F, 0.4F);
 		Level level = Minecraft.getInstance().level;
 		Minecraft.getInstance().getItemRenderer().renderStatic(
 				itemstack,
-				net.minecraft.world.item.ItemDisplayContext.FIXED,
+				net.minecraft.world.item.ItemDisplayContext.GUI,
 				packedLight,
 				net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY,
 				poseStack,

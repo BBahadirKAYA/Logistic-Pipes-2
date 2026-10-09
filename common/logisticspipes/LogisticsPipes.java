@@ -227,6 +227,7 @@ public class LogisticsPipes {
 		loadManifestValues(LogisticsPipes.class.getClassLoader());
 		ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, Configs.SPEC);
 		modEventBus.addListener(Configs::onReload);
+		logisticspipes.items.ItemPipeSignCreator.registerPipeSignTypes();
 		LPRegistries.register(modEventBus);
 
 		modEventBus.addListener(this::preInit);

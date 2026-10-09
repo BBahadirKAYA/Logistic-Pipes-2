@@ -765,6 +765,11 @@ public class LogisticsTileGenericPipe extends LPMicroblockTileEntity
 			return;
 		}
 
+		// our update tag already built the pipe in load(); LP1's client only initialized here
+		if (!initialized) {
+			initialize(pipe);
+		}
+
 		level.sendBlockUpdated(worldPosition, level.getBlockState(worldPosition), level.getBlockState(worldPosition), 3);
 
 		if (renderState.needsRenderUpdate()) {

@@ -119,9 +119,14 @@ public final class LPClientChecks {
 						msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO glasses focus screenshot: {}", msg.getString()));
 				case SETTLE_TICKS + 123 -> {
 					mc.options.keyShift.setDown(false);
-					finishTubes(mc);
+					startSign(mc);
 				}
-				case SETTLE_TICKS + 126 -> {
+				// the sign packet and teleport need a few server ticks
+				case SETTLE_TICKS + 143 -> checkSign(mc);
+				case SETTLE_TICKS + 144 -> Screenshot.grab(mc.gameDirectory, "lpcheck_sign.png", mc.getMainRenderTarget(),
+						msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO sign screenshot: {}", msg.getString()));
+				case SETTLE_TICKS + 145 -> finishTubes(mc);
+				case SETTLE_TICKS + 148 -> {
 					logisticspipes.LogisticsPipes.log.info("LPCHECK DONE failures={}", failures);
 					mc.stop();
 				}
@@ -403,6 +408,38 @@ public final class LPClientChecks {
 		if (sp.serverLevel().getBlockEntity(pos) instanceof net.minecraft.world.level.block.entity.ChestBlockEntity chest) {
 			chest.setItem(0, new net.minecraft.world.item.ItemStack(item, count));
 		}
+	}
+
+	/** Item amount sign on the front provider's free south face, seen up close without glasses. */
+	private static void startSign(Minecraft mc) {
+		var server = mc.getSingleplayerServer();
+		if (server == null || tubeBase == null) return;
+		server.execute(() -> {
+			var sp = server.getPlayerList().getPlayer(mc.player.getUUID());
+			if (sp == null) return;
+			BlockPos b = tubeBase;
+			sp.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD, net.minecraft.world.item.ItemStack.EMPTY);
+			BlockPos at = b.offset(0, 0, -2);
+			boolean ok = sp.serverLevel().getBlockEntity(at) instanceof LogisticsTileGenericPipe pipe
+					&& pipe.pipe instanceof logisticspipes.pipes.basic.CoreRoutedPipe;
+			if (ok) {
+				var sign = new logisticspipes.pipes.signs.ItemAmountPipeSign();
+				sign.itemTypeInv.setItem(0, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND));
+				sign.amount = 64;
+				((logisticspipes.pipes.basic.CoreRoutedPipe) ((LogisticsTileGenericPipe) sp.serverLevel().getBlockEntity(at)).pipe)
+						.addPipeSign(Direction.SOUTH, sign, sp);
+			}
+			result("sign.placed", ok, "provider at " + at);
+			// eye 1.62 above the floor, pipe centre 1.5 blocks north and 1.12 lower
+			sp.teleportTo(sp.serverLevel(), b.getX() + 0.5, b.getY(), b.getZ(), 180f, 36.7f);
+		});
+	}
+
+	/** The client copy of the provider must have received the sign. */
+	private static void checkSign(Minecraft mc) {
+		int signs = tubeBase != null && mc.level.getBlockEntity(tubeBase.offset(0, 0, -2)) instanceof LogisticsTileGenericPipe pipe
+				&& pipe.pipe instanceof logisticspipes.pipes.basic.CoreRoutedPipe routed ? routed.getPipeSigns().size() : -1;
+		result("sign.client", signs == 1, "signs=" + signs);
 	}
 
 	/** The HUD renderer must have picked up all three pipes as panels. */
