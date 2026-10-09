@@ -507,6 +507,63 @@ public class LPGameTests {
 		});
 	}
 
+	/** A pipe ignores a turtle until the turtle calls setTurtleConnect(true); removing the turtle clears the flag. */
+	@GameTest(template = "empty")
+	public static void turtleConnectsOnRequest(GameTestHelper helper) {
+		if (!net.minecraftforge.fml.ModList.get().isLoaded(LPConstants.computerCraftModID)) {
+			helper.succeed();
+			return;
+		}
+		LogisticsTileGenericPipe tile = placeBasicPipe(helper);
+		BlockPos turtle = PIPE.east();
+		helper.setBlock(turtle, net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(
+				new net.minecraft.resources.ResourceLocation(LPConstants.computerCraftModID, "turtle_normal")));
+		int east = net.minecraft.core.Direction.EAST.ordinal();
+		helper.runAfterDelay(5, () -> {
+			helper.assertTrue(SimpleServiceLocator.ccProxy.isTurtle(helper.getBlockEntity(turtle)), "turtle not recognised");
+			helper.assertFalse(tile.pipeConnectionsBuffer[east], "pipe connected to the turtle before setTurtleConnect");
+			helper.assertTrue(Turtles.call(tile, "setTurtleConnect", true) == null, "setTurtleConnect failed");
+		});
+		helper.runAfterDelay(10, () -> {
+			helper.assertTrue(tile.turtleConnect[east], "turtleConnect flag not set");
+			helper.assertTrue(tile.pipeConnectionsBuffer[east], "pipe did not connect to the turtle");
+			helper.assertTrue(Boolean.TRUE.equals(Turtles.call(tile, "getTurtleConnect")), "getTurtleConnect not true");
+			helper.setBlock(turtle, Blocks.AIR);
+		});
+		helper.runAfterDelay(15, () -> {
+			helper.assertFalse(tile.turtleConnect[east], "turtleConnect kept after the turtle left");
+			helper.succeed();
+		});
+	}
+
+	// loaded only when CC: Tweaked is present; a stub computer stands in for the turtle's Lua side
+	private static final class Turtles {
+		static Object call(LogisticsTileGenericPipe tile, String method, Object... args) {
+			var peripheral = (dan200.computercraft.api.peripheral.IDynamicPeripheral) logisticspipes.proxy.cc.CCProxy.createPeripheral(tile, net.minecraft.core.Direction.EAST);
+			var computer = new dan200.computercraft.api.peripheral.IComputerAccess() {
+				public String mount(String desiredLocation, dan200.computercraft.api.filesystem.Mount mount, String driveName) { return null; }
+				public String mountWritable(String desiredLocation, dan200.computercraft.api.filesystem.WritableMount mount, String driveName) { return null; }
+				public void unmount(String location) {}
+				public int getID() { return 1; }
+				public void queueEvent(String event, Object... arguments) {}
+				public String getAttachmentName() { return "east"; }
+				public java.util.Map<String, dan200.computercraft.api.peripheral.IPeripheral> getAvailablePeripherals() { return java.util.Map.of(); }
+				public dan200.computercraft.api.peripheral.IPeripheral getAvailablePeripheral(String name) { return null; }
+				public dan200.computercraft.api.peripheral.WorkMonitor getMainThreadMonitor() { return null; }
+			};
+			int id = java.util.Arrays.asList(peripheral.getMethodNames()).indexOf(method);
+			peripheral.attach(computer);
+			try {
+				Object[] result = peripheral.callMethod(computer, task -> 0, id, new dan200.computercraft.api.lua.ObjectArguments(args)).getResult();
+				return result == null || result.length == 0 ? null : result[0];
+			} catch (dan200.computercraft.api.lua.LuaException e) {
+				throw new net.minecraft.gametest.framework.GameTestAssertException(method + ": " + e.getMessage());
+			} finally {
+				peripheral.detach(computer);
+			}
+		}
+	}
+
 	// loaded only when AE2 is present
 	private static final class AE2Fluids {
 		static long insertWater(net.minecraft.world.level.block.entity.BlockEntity tile, long amount) {

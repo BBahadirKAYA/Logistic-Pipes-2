@@ -51,6 +51,7 @@ public final class LPClientChecks {
 	private static int failures = 0;
 	private static int particleBaseline;
 	private static boolean drawHud = false;
+	private static boolean drawFont = false;
 	private static final List<IHUDModuleRenderer> hudRenderers = new ArrayList<>();
 
 	private LPClientChecks() {}
@@ -66,6 +67,10 @@ public final class LPClientChecks {
 		Minecraft mc = Minecraft.getInstance();
 		if (mc.player == null || mc.level == null) return;
 		tick++;
+		if (mc.getSingleplayerServer() == null) {
+			remoteTick(mc);
+			return;
+		}
 		try {
 			switch (tick) {
 				case SETTLE_TICKS - 20 -> facePipe(mc);
@@ -111,6 +116,7 @@ public final class LPClientChecks {
 				case SETTLE_TICKS + 87 -> startGlasses(mc);
 				case SETTLE_TICKS + 117 -> {
 					checkGlasses();
+					checkHudPower(mc);
 					Screenshot.grab(mc.gameDirectory, "lpcheck_glasses.png", mc.getMainRenderTarget(),
 							msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO glasses screenshot: {}", msg.getString()));
 					mc.options.keyShift.setDown(true);
@@ -169,8 +175,24 @@ public final class LPClientChecks {
 				case SETTLE_TICKS + 260 -> checkWatchedMonitor(mc);
 				case SETTLE_TICKS + 263 -> checkZoomedMonitor(mc);
 				case SETTLE_TICKS + 400 -> checkStickDelivery(mc);
-				case SETTLE_TICKS + 401 -> finishRequestStation(mc);
-				case SETTLE_TICKS + 403 -> {
+				case SETTLE_TICKS + 401 -> {
+					mc.setScreen(null);
+					drawFont = true;
+				}
+				case SETTLE_TICKS + 404 -> {
+					checkFontGlyphs(mc);
+					drawFont = false;
+					startFinderStation(mc);
+				}
+				// pipe and chest reach the client before the request
+				case SETTLE_TICKS + 414 -> sendSlotFinder(mc);
+				case SETTLE_TICKS + 420 -> clickSlotFinder(mc);
+				case SETTLE_TICKS + 426 -> checkSlotFinderAssigned(mc);
+				case SETTLE_TICKS + 427 -> openSecurityStation(mc);
+				case SETTLE_TICKS + 432 -> pressSecurityWidgets(mc);
+				case SETTLE_TICKS + 437 -> checkSecurityStation(mc);
+				case SETTLE_TICKS + 441 -> finishRequestStation(mc);
+				case SETTLE_TICKS + 443 -> {
 					logisticspipes.LogisticsPipes.log.info("LPCHECK DONE failures={}", failures);
 					mc.stop();
 				}
@@ -438,6 +460,7 @@ public final class LPClientChecks {
 			String front = placePipe(sp, "pipe_provider", b.offset(0, 0, 1), "PipeItemsProvider");
 			String back = placePipe(sp, "pipe_provider", b.offset(1, 0, -2), "PipeItemsProvider");
 			String sat = placePipe(sp, "pipe_satellite", b.offset(2, 0, 1), "PipeItemsSatellite");
+			requestBlock(sp, b.offset(-2, 0, -1), "logisticspipes:power_junction{powerLevel:1000000}");
 			result("glasses.placed", front == null && back == null && sat == null,
 					"front=" + (front == null ? "ok" : front) + " back=" + (back == null ? "ok" : back) + " satellite=" + (sat == null ? "ok" : sat));
 			var glasses = new net.minecraft.world.item.ItemStack(net.minecraft.core.registries.BuiltInRegistries.ITEM.get(net.minecraft.resources.ResourceLocation.tryParse("logisticspipes:hud_glasses")));
@@ -769,6 +792,50 @@ public final class LPClientChecks {
 		} finally {
 			logisticspipes.utils.gui.SimpleGraphics.guiGraphics = previous;
 		}
+	}
+
+	private static BlockPos remoteTable;
+
+	/** Joined to a dedicated server: only the checks that need a client without an integrated server. */
+	private static void remoteTick(Minecraft mc) {
+		try {
+			switch (tick) {
+				case SETTLE_TICKS -> {
+					checkClientRecipeList(mc);
+					remoteTable = mc.player.blockPosition().east(2);
+					mc.player.connection.sendCommand(String.format("setblock %d %d %d logisticspipes:pipe{pipeIdName:\"logisticspipes:pipe_request_table\"}",
+							remoteTable.getX(), remoteTable.getY(), remoteTable.getZ()));
+				}
+				case SETTLE_TICKS + 20 -> {
+					checkRemoteTableRecipe(mc);
+					mc.player.connection.sendCommand(String.format("setblock %d %d %d air", remoteTable.getX(), remoteTable.getY(), remoteTable.getZ()));
+				}
+				case SETTLE_TICKS + 25 -> {
+					logisticspipes.LogisticsPipes.log.info("LPCHECK DONE failures={}", failures);
+					mc.stop();
+				}
+				default -> {}
+			}
+		} catch (Throwable t) {
+			result("driver", false, t.toString());
+			logisticspipes.LogisticsPipes.log.error("LPCHECK driver crashed", t);
+			mc.stop();
+		}
+	}
+
+	/** A remote client has no server recipe manager; the table's crafting preview must still find the stick recipe. */
+	private static void checkRemoteTableRecipe(Minecraft mc) {
+		if (!(mc.level.getBlockEntity(remoteTable) instanceof LogisticsTileGenericPipe tile
+				&& tile.pipe instanceof logisticspipes.pipes.PipeBlockRequestTable table)) {
+			result("recipes.remoteTable", false, "no client request table at " + remoteTable + " (is the player op?)");
+			return;
+		}
+		var planks = new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.OAK_PLANKS);
+		table.matrix.setItem(1, planks.copy());
+		table.matrix.setItem(4, planks.copy());
+		table.cacheRecipe();
+		var out = table.resultInv.getItem(0);
+		result("recipes.remoteTable", out.is(net.minecraft.world.item.Items.STICK) && out.getCount() == 4, "preview=" + out);
 	}
 
 	/** The request table's client half reads the synced client recipe list; it must hold LP's own recipes. */
@@ -1198,6 +1265,234 @@ public final class LPClientChecks {
 		result("particles.destroyEffects", now > particleBaseline, "particles " + particleBaseline + " -> " + now + " at " + particlePos);
 	}
 
+	/** HUD power readout: the glasses list holds the junction with its synced level, drawn as LP1 lays it out. */
+	private static void checkHudPower(Minecraft mc) throws ReflectiveOperationException {
+		Field f = logisticspipes.renderer.LogisticsHUDRenderer.class.getDeclaredField("list");
+		f.setAccessible(true);
+		var junction = ((java.util.List<?>) f.get(logisticspipes.renderer.LogisticsHUDRenderer.instance())).stream()
+				.filter(p -> p instanceof logisticspipes.blocks.powertile.LogisticsPowerJunctionTileEntity)
+				.map(p -> (logisticspipes.blocks.powertile.LogisticsPowerJunctionTileEntity) p).findFirst().orElse(null);
+		if (junction == null) {
+			result("hud.powerLevel", false, "junction not in the glasses list");
+			return;
+		}
+		List<String> texts = new ArrayList<>();
+		List<Integer> bars = new ArrayList<>();
+		var recorder = new GuiGraphics(mc, mc.renderBuffers().bufferSource()) {
+			@Override
+			public int drawString(net.minecraft.client.gui.Font font, String text, int x, int y, int colour, boolean shadow) {
+				texts.add(text);
+				return 0;
+			}
+
+			@Override
+			public void blit(net.minecraft.resources.ResourceLocation texture, int x, int y, float u, float v, int width, int height, int texWidth, int texHeight) {
+				bars.add(height);
+			}
+		};
+		var config = new logisticspipes.hud.HUDConfig(mc.player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD));
+		var renderer = junction.getRenderer();
+		var previous = SimpleGraphics.guiGraphics;
+		SimpleGraphics.guiGraphics = recorder;
+		try {
+			renderer.renderHeadUpDisplay(2, false, false, mc, config);
+		} finally {
+			SimpleGraphics.guiGraphics = previous;
+		}
+		// background tiles come first; then the 61 px frame and, at 50 %, a 59 - 29 = 30 px fill
+		List<Integer> gauge = bars.size() < 2 ? bars : bars.subList(bars.size() - 2, bars.size());
+		boolean ok = renderer.display(config) && texts.equals(List.of("Stored Energy:", "1 000 000 LP", "/ 2 000 000 LP")) && gauge.equals(List.of(61, 30));
+		result("hud.powerLevel", ok, "display=" + renderer.display(config) + " texts=" + texts + " gauge=" + gauge);
+	}
+
+	private static final String FONT_SAMPLE = "Ag@Q";
+	private static final int FONT_X = 10, FONT_Y = 10, FONT_STEP = 16;
+
+	/** Guide font: each sample glyph on screen matches its BDF bitmap pixel for pixel (vanilla font or a broken atlas would not). */
+	private static void checkFontGlyphs(Minecraft mc) {
+		var font = network.rs485.logisticspipes.gui.font.FontParser.INSTANCE.read(
+				new net.minecraft.resources.ResourceLocation(LPConstants.LP_MOD_ID, "fonts/ter-u12n.bdf"));
+		int scale = (int) mc.getWindow().getGuiScale();
+		List<String> bad = new ArrayList<>();
+		try (var image = Screenshot.takeScreenshot(mc.getMainRenderTarget())) {
+			for (int k = 0; k < FONT_SAMPLE.length(); k++) {
+				char c = FONT_SAMPLE.charAt(k);
+				var glyph = font.getGlyphs().get(c);
+				int[] want = inkBox(glyph.getWidth(), glyph.getHeight(), (x, y) -> glyph.getBitmap().get(y * glyph.getWidth() + x));
+				int left = (FONT_X + k * FONT_STEP - 2) * scale, top = (FONT_Y - 4) * scale;
+				int[] got = inkBox(FONT_STEP, 24, (x, y) -> bright(image.getPixelRGBA(left + x * scale + scale / 2, top + y * scale + scale / 2)));
+				if (want == null || got == null || want[2] - want[0] != got[2] - got[0] || want[3] - want[1] != got[3] - got[1]) {
+					bad.add(c + " box want=" + java.util.Arrays.toString(want) + " got=" + java.util.Arrays.toString(got));
+					continue;
+				}
+				int mismatches = 0;
+				for (int y = 0; y <= want[3] - want[1]; y++) {
+					for (int x = 0; x <= want[2] - want[0]; x++) {
+						boolean bit = glyph.getBitmap().get((want[1] + y) * glyph.getWidth() + want[0] + x);
+						boolean px = bright(image.getPixelRGBA(left + (got[0] + x) * scale + scale / 2, top + (got[1] + y) * scale + scale / 2));
+						if (bit != px) mismatches++;
+					}
+				}
+				if (mismatches > 0) bad.add(c + " " + mismatches + " pixels differ");
+			}
+		}
+		Screenshot.grab(mc.gameDirectory, "lpcheck_font.png", mc.getMainRenderTarget(),
+				msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO font screenshot: {}", msg.getString()));
+		result("guide.fontGlyphs", bad.isEmpty(), bad.isEmpty() ? FONT_SAMPLE + " match ter-u12n at gui scale " + scale : bad.toString());
+	}
+
+	private static boolean bright(int abgr) {
+		return Math.max(abgr & 0xFF, Math.max((abgr >> 8) & 0xFF, (abgr >> 16) & 0xFF)) > 160;
+	}
+
+	/** Bounding box {x0, y0, x1, y1} of the set cells, or null when none are set. */
+	private static int[] inkBox(int width, int height, java.util.function.BiPredicate<Integer, Integer> ink) {
+		int[] box = null;
+		for (int y = 0; y < height; y++) {
+			for (int x = 0; x < width; x++) {
+				if (!ink.test(x, y)) continue;
+				if (box == null) box = new int[] { x, y, x, y };
+				box[0] = Math.min(box[0], x);
+				box[1] = Math.min(box[1], y);
+				box[2] = Math.max(box[2], x);
+				box[3] = Math.max(box[3], y);
+			}
+		}
+		return box;
+	}
+
+	private static BlockPos finderBase;
+
+	/** Slot finder and security station stand: chest (ender chest with EnderStorage) + supplier pipe, security station. */
+	private static void startFinderStation(Minecraft mc) {
+		var server = mc.getSingleplayerServer();
+		if (server == null || requestBase == null) {
+			result("slotFinder.placed", false, "no platform");
+			return;
+		}
+		server.execute(() -> {
+			var sp = server.getPlayerList().getPlayer(mc.player.getUUID());
+			if (sp == null) return;
+			BlockPos s = finderBase = requestBase.offset(-4, 0, 4);
+			boolean ender = net.minecraftforge.fml.ModList.get().isLoaded(LPConstants.enderStorageModID);
+			requestBlock(sp, s, ender ? LPConstants.enderStorageModID + ":ender_chest" : "chest");
+			requestBlock(sp, s.east(), "logisticspipes:pipe{pipeIdName:\"logisticspipes:pipe_supplier\"}");
+			requestBlock(sp, s.south(2), "logisticspipes:security_station");
+			sp.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, net.minecraft.world.item.ItemStack.EMPTY);
+			sp.teleportTo(sp.serverLevel(), s.getX() + 1.5, s.getY(), s.getZ() + 4.5, 180f, 20f);
+			result("slotFinder.placed", sp.serverLevel().getBlockEntity(s.east()) instanceof LogisticsTileGenericPipe tile
+					&& tile.pipe instanceof logisticspipes.pipes.PipeItemsSupplierLogistics, (ender ? "ender chest" : "chest") + " at " + s);
+		});
+	}
+
+	/** Same packet the supplier GUI's Set button sends for pattern slot 0. */
+	private static void sendSlotFinder(Minecraft mc) {
+		if (finderBase == null) return;
+		if (!(mc.level.getBlockEntity(finderBase.east()) instanceof LogisticsTileGenericPipe tile
+				&& tile.pipe instanceof logisticspipes.pipes.PipeItemsSupplierLogistics supplier)) {
+			result("slotFinder.endToEnd", false, "no client supplier pipe");
+			return;
+		}
+		logisticspipes.proxy.MainProxy.sendPacketToServer(logisticspipes.network.PacketHandler.getPacket(logisticspipes.network.packets.pipe.SlotFinderOpenGuiPacket.class)
+				.setSlot(0).setModulePos(supplier.getLogisticsModule()));
+	}
+
+	/** The server opened the chest and armed the overlay on this client; pick chest slot 4. */
+	private static void clickSlotFinder(Minecraft mc) throws ReflectiveOperationException {
+		if (finderBase == null) return;
+		var overlay = logisticspipes.renderer.GuiOverlay.getInstance();
+		int[] target = new int[3];
+		String[] names = { "targetPosX", "targetPosY", "targetPosZ" };
+		for (int i = 0; i < 3; i++) {
+			Field f = overlay.getClass().getDeclaredField(names[i]);
+			f.setAccessible(true);
+			target[i] = f.getInt(overlay);
+		}
+		boolean armed = overlay.isOverlaySlotActive() && new BlockPos(target[0], target[1], target[2]).equals(finderBase);
+		String screen = mc.screen == null ? "none" : mc.screen.getClass().getName();
+		if (!(mc.screen instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?> chest) || !armed) {
+			result("slotFinder.endToEnd", false, "screen=" + screen + " overlay active=" + overlay.isOverlaySlotActive() + " target=" + java.util.Arrays.toString(target));
+			overlay.setOverlaySlotActive(false);
+			return;
+		}
+		var slot = chest.getMenu().slots.get(4);
+		click(chest, chest.getGuiLeft() + slot.x + 8, chest.getGuiTop() + slot.y + 8, 0);
+		logisticspipes.LogisticsPipes.log.info("LPCHECK INFO slotFinder: overlay armed on {}, clicked slot 4", screen);
+	}
+
+	/** The click went back to the server and set the supplier's pattern slot 0 to chest slot 4. */
+	private static void checkSlotFinderAssigned(Minecraft mc) {
+		var server = mc.getSingleplayerServer();
+		if (server == null || finderBase == null) return;
+		boolean closed = mc.screen == null;
+		boolean off = !logisticspipes.renderer.GuiOverlay.getInstance().isOverlaySlotActive();
+		mc.setScreen(null);
+		server.execute(() -> {
+			int assigned = -1;
+			if (server.overworld().getBlockEntity(finderBase.east()) instanceof LogisticsTileGenericPipe tile
+					&& tile.pipe instanceof logisticspipes.pipes.PipeItemsSupplierLogistics supplier) {
+				assigned = supplier.getLogisticsModule().slotAssignmentPattern.get(0);
+			}
+			result("slotFinder.endToEnd", assigned == 4 && closed && off, "pattern[0]=" + assigned + " screen closed=" + closed + " overlay off=" + off);
+		});
+	}
+
+	/** Opens the station like a player; dev builds run with DEBUG, which shows the CC widgets without CC: Tweaked. */
+	private static void openSecurityStation(Minecraft mc) {
+		if (finderBase == null) return;
+		BlockPos station = finderBase.south(2);
+		var hit = new BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(station).add(0, 0, 0.5), Direction.SOUTH, station, false);
+		mc.gameMode.useItemOn(mc.player, net.minecraft.world.InteractionHand.MAIN_HAND, hit);
+	}
+
+	private static net.minecraft.client.gui.components.AbstractButton securityWidget(logisticspipes.gui.GuiSecurityStation gui, String name) throws ReflectiveOperationException {
+		Field f = logisticspipes.gui.GuiSecurityStation.class.getDeclaredField(name);
+		f.setAccessible(true);
+		return (net.minecraft.client.gui.components.AbstractButton) f.get(gui);
+	}
+
+	/** CC widgets show, the allow-CC box toggles, Edit Table opens the access table popup; add computer id 2 there. */
+	private static void pressSecurityWidgets(Minecraft mc) throws ReflectiveOperationException {
+		if (!(mc.screen instanceof logisticspipes.gui.GuiSecurityStation gui)) {
+			result("security.ccWidgets", false, "screen=" + (mc.screen == null ? "none" : mc.screen.getClass().getSimpleName()));
+			return;
+		}
+		var allow = securityWidget(gui, "checkAllowCC");
+		var edit = securityWidget(gui, "btnEditTable");
+		boolean visible = allow.visible && edit.visible;
+		allow.onPress();
+		edit.onPress();
+		var popup = gui.hasSubGui() ? gui.getSubGui() : null;
+		boolean popupOpen = popup instanceof logisticspipes.gui.popup.GuiEditCCAccessTable;
+		if (popupOpen) {
+			for (String label : new String[] { "+", "+", network.rs485.logisticspipes.util.TextUtil.translate("gui.securitystation.popup.ccAccess.Add") }) {
+				popup.children().stream().filter(w -> w instanceof net.minecraft.client.gui.components.AbstractButton b && b.getMessage().getString().equals(label))
+						.findFirst().ifPresent(w -> ((net.minecraft.client.gui.components.AbstractButton) w).onPress());
+			}
+		}
+		logisticspipes.LogisticsPipes.log.info("LPCHECK INFO security: widgets visible={} popup={}", visible, popupOpen);
+		if (!visible || !popupOpen) result("security.ccWidgets", false, "widgets visible=" + visible + " popup=" + popup);
+	}
+
+	/** The station on the server took both edits: CC allowed, computer 2 excluded. */
+	private static void checkSecurityStation(Minecraft mc) {
+		var server = mc.getSingleplayerServer();
+		boolean client = mc.screen instanceof logisticspipes.gui.GuiSecurityStation gui && gui.hasSubGui();
+		Screenshot.grab(mc.gameDirectory, "lpcheck_security.png", mc.getMainRenderTarget(),
+				msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO security screenshot: {}", msg.getString()));
+		mc.setScreen(null);
+		if (server == null || finderBase == null) return;
+		server.execute(() -> {
+			boolean allow = false;
+			List<Integer> excluded = List.of();
+			if (server.overworld().getBlockEntity(finderBase.south(2)) instanceof logisticspipes.blocks.LogisticsSecurityTileEntity tile) {
+				allow = tile.allowCC;
+				excluded = List.copyOf(tile.excludedCC);
+			}
+			result("security.ccWidgets", client && allow && excluded.equals(List.of(2)), "popup open=" + client + " server allowCC=" + allow + " excluded=" + excluded);
+		});
+	}
+
 	/** Worklog item 8: HUDAsyncExtractor text, drawn on screen for the screenshot. */
 	private static void startHud() throws ReflectiveOperationException {
 		AsyncExtractorModule defaultSide = new AsyncExtractorModule();
@@ -1215,6 +1510,7 @@ public final class LPClientChecks {
 
 	@SubscribeEvent
 	public static void onRenderGui(RenderGuiEvent.Post event) {
+		if (ENABLED && drawFont) drawFontSample(event.getGuiGraphics());
 		if (!ENABLED || !drawHud) return;
 		GuiGraphics gg = event.getGuiGraphics();
 		GuiGraphics previous = SimpleGraphics.guiGraphics;
@@ -1229,6 +1525,20 @@ public final class LPClientChecks {
 				renderer.renderContent(false);
 				gg.pose().popPose();
 				x += 120;
+			}
+		} finally {
+			SimpleGraphics.guiGraphics = previous;
+		}
+	}
+
+	private static void drawFontSample(GuiGraphics gg) {
+		gg.fill(FONT_X - 4, FONT_Y - 6, FONT_X + FONT_SAMPLE.length() * FONT_STEP + 4, FONT_Y + 22, 0xff000000);
+		GuiGraphics previous = SimpleGraphics.guiGraphics;
+		SimpleGraphics.guiGraphics = gg;
+		try {
+			var renderer = network.rs485.logisticspipes.gui.font.LPFontRenderer.Factory.get("ter-u12n");
+			for (int k = 0; k < FONT_SAMPLE.length(); k++) {
+				renderer.drawString(String.valueOf(FONT_SAMPLE.charAt(k)), FONT_X + k * FONT_STEP, FONT_Y, 0xffffffff, java.util.Set.of(), 1f);
 			}
 		} finally {
 			SimpleGraphics.guiGraphics = previous;
