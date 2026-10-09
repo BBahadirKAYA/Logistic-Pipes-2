@@ -64,7 +64,6 @@ import net.minecraft.resources.ResourceLocation
 import java.lang.Float.min
 
 // Rendering ported to 1.20.1 GuiGraphics via SimpleGraphics.guiGraphics (set by BaseGuiContainer.render()).
-// BDF custom-font paths remain deferred — those live on LPFontRenderer.
 
 /**
  * Drawing methods to help with GUIs (rendering implementation deferred for 1.20.1).

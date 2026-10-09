@@ -37,20 +37,21 @@
 
 package network.rs485.logisticspipes.gui.font
 
+import com.mojang.blaze3d.platform.NativeImage
+import logisticspipes.LPConstants
 import logisticspipes.LogisticsPipes
-import java.util.*
+import net.minecraft.client.Minecraft
+import net.minecraft.client.renderer.texture.DynamicTexture
+import net.minecraft.resources.ResourceLocation
 import kotlin.math.max
 
-// TODO: Rendering deferred — GL11/GlStateManager/TextureUtil usage stubbed for 1.20.1 migration.
-
-private val buffer = java.nio.ByteBuffer.allocateDirect(10000000).asIntBuffer()
-
-class FontWrapper(private val font: IFont) {
-    val textures: List<Int> get() = emptyList()
+class FontWrapper(private val font: IFont, private val fontName: String) {
+    val textures: List<ResourceLocation> get() = pages.toList()
 
     private var glyphPosX: Map<Char, Int> = emptyMap()
     private var glyphPosY: Map<Char, Int> = emptyMap()
-    private var textureIndex: Map<Int, CharRange> = emptyMap()
+    private var glyphPage: Map<Char, Int> = emptyMap()
+    private val pages = mutableListOf<ResourceLocation>()
 
     val fontWidth: Int get() = font.width
     val fontHeight: Int get() = font.height
@@ -63,11 +64,79 @@ class FontWrapper(private val font: IFont) {
     private val maxTexSize = 512
 
     init {
-        // TODO: deferred — texture allocation requires GL context; skipped during migration
+        allocateTextures()
     }
 
-    // Getter for the texture indexes, returns -1 if null.
-    fun getTextureIndex(c: Char): Int = -1
+    // Creates the necessary textures with all the glyphs in them
+    private fun allocateTextures(): Pair<Int, Int> {
+        var image: NativeImage? = null
+        var currentWidth = 0
+        var currentHeight = 0
+        var currentRowMaxHeight = 0
+        var currentMaxHeight = 0
+        var currentMinOffset = 0
+
+        fun uploadPage() {
+            val img = image ?: return
+            // DynamicTexture uploads on creation and samples with nearest filtering
+            val location = ResourceLocation(LPConstants.LP_MOD_ID, "font/${fontName}_${pages.size}")
+            Minecraft.getInstance().textureManager.register(location, DynamicTexture(img))
+            pages.add(location)
+            image = null
+        }
+
+        fun startNewRow() {
+            // Use gathered row data to keep track of highest character.
+            currentMaxHeight = max(currentMaxHeight, currentRowMaxHeight)
+            // Use gathered row data to safely start the next row with interfering with the previous ones.
+            currentHeight += currentRowMaxHeight.powerOf2()
+            // Reset row variables.
+            currentWidth = 0
+            currentRowMaxHeight = 0
+        }
+
+        fun startNewTexture() {
+            uploadPage()
+            currentWidth = 0
+            currentHeight = 0
+            currentRowMaxHeight = 0
+            image = NativeImage(maxTexSize, maxTexSize, true)
+        }
+
+        fun allocateGlyph(character: Char, glyph: IGlyph) {
+            if (currentWidth + glyph.width > maxTexSize)
+                error("Cannot write a texture of width=${glyph.width} at x=$currentWidth")
+            if (currentHeight + glyph.height > maxTexSize)
+                error("Cannot write a texture of height=${glyph.height} at y=$currentHeight")
+            // Store the location of the glyph
+            glyphPosX = glyphPosX + (character to currentWidth)
+            glyphPosY = glyphPosY + (character to currentHeight)
+            glyphPage = glyphPage + (character to pages.size)
+            // Draw the glyph into the texture, set bits white and opaque
+            val img = image!!
+            for (i in 0 until glyph.width * glyph.height) {
+                img.setPixelRGBA(currentWidth + i % glyph.width, currentHeight + i / glyph.width, if (glyph.bitmap[i]) -1 else 0)
+            }
+            // After allocation
+            currentWidth += glyph.width.powerOf2()
+            currentRowMaxHeight = maxOf(currentRowMaxHeight, glyph.height)
+            currentMinOffset = minOf(currentMinOffset, glyph.offsetY)
+        }
+
+        startNewTexture()
+        for ((character, glyph) in font.glyphs) {
+            if (currentWidth + glyph.width > maxTexSize) startNewRow()
+            if (currentHeight + glyph.height > maxTexSize) startNewTexture()
+            allocateGlyph(character, glyph)
+        }
+        uploadPage()
+        LogisticsPipes.log.info("Font $fontName uses ${pages.size} texture page(s) for ${font.glyphs.size} glyphs")
+
+        return currentMaxHeight to currentMinOffset
+    }
+
+    // Getter for the glyph's atlas page, returns null if the char has no glyph.
+    fun getTexture(c: Char): ResourceLocation? = glyphPage[c]?.let { pages[it] }
 
     // Getter for width, return -1 if char not found.
     fun getFontTextureSize(): Int = maxTexSize
@@ -81,6 +150,7 @@ class FontWrapper(private val font: IFont) {
     // Getter for the Glyph object
     fun getGlyph(c: Char): IGlyph? = font.glyphs[c] ?: font.glyphs[font.defaultChar]
 
+    // Rounds up to the next power of two.
     private fun Int.powerOf2(): Int {
         var n = this - 1
         n = n or n.ushr(1)

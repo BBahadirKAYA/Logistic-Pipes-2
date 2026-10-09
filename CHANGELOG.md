@@ -14,6 +14,7 @@ follows [Semantic Versioning](https://semver.org/) where practical.
 
 ### Fixed
 - Computer requests report missing items as resources instead of nil.
+- The guide book uses its own LP1 font again instead of the vanilla one.
 - 1.20.1: a pipe next to an AE2 interface no longer crashes the server while the ME network starts up.
 - The Power Junction accepts Forge Energy from cables and other mods again.
 - Hoppers and other mods can insert into the Logistics Crafting Table.

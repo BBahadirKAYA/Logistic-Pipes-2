@@ -37,13 +37,22 @@
 
 package network.rs485.logisticspipes.gui.font
 
+import com.mojang.blaze3d.vertex.VertexConsumer
 import network.rs485.grow.Coroutines
+import network.rs485.logisticspipes.util.alpha
+import network.rs485.logisticspipes.util.blue
+import network.rs485.logisticspipes.util.green
+import network.rs485.logisticspipes.util.red
 import network.rs485.markdown.*
 import logisticspipes.LPConstants
 import logisticspipes.LogisticsPipes
 import logisticspipes.utils.gui.SimpleGraphics
 import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.GuiGraphics
+import net.minecraft.client.renderer.LightTexture
+import net.minecraft.client.renderer.RenderType
 import net.minecraft.resources.ResourceLocation
+import org.joml.Matrix4f
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.ceil
@@ -51,10 +60,6 @@ import kotlin.math.tan
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
-
-// Drawing falls back to vanilla `Font` via `GuiGraphics.drawString`, so widths are measured with it
-// too; only the line height still comes from the BDF font. A full BDF atlas rewrite with Blaze3D
-// buffers is deferred.
 
 class LPFontRenderer(private val fontName: String) {
     companion object Factory {
@@ -94,78 +99,184 @@ class LPFontRenderer(private val fontName: String) {
             ?: throw IOException("Failed to load ${fontResourcePlain.path}, this is not tolerated.")
     }
 
+    // builds GL textures, so only touch it on the render thread
     private val wrapperPlain: FontWrapper by lazy {
         val initialTime = System.currentTimeMillis()
-        FontWrapper(fontPlain).also { LogisticsPipes.log.info("Elapsed time wrapping font: ${System.currentTimeMillis() - initialTime}ms") }
+        FontWrapper(fontPlain, fontName).also { LogisticsPipes.log.info("Elapsed time wrapping font: ${System.currentTimeMillis() - initialTime}ms") }
     }
 
+    private val shadowColor = 0xEE3C3F41.toInt()
     var zLevel: Float = 5f
 
     fun width(text: String): Int = getStringWidth(text)
 
+    private fun VertexConsumer.putVertex(matrix: Matrix4f, x: Float, y: Float, color: Int, u: Float, v: Float) {
+        vertex(matrix, x, y, zLevel).color(color.red(), color.green(), color.blue(), color.alpha()).uv(u, v).uv2(LightTexture.FULL_BRIGHT).endVertex()
+    }
+
+    private fun VertexConsumer.putVertex(matrix: Matrix4f, x: Float, y: Float, color: Int) {
+        vertex(matrix, x, y, zLevel).color(color.red(), color.green(), color.blue(), color.alpha()).endVertex()
+    }
+
     /**
-     * Draws the given string via vanilla `Font` (fallback until the BDF atlas pipeline is reimplemented).
-     * Width returned matches what vanilla `Font` draws.
+     * Adds the given char at the given spot with the set color to the buffer and returns the xOffset for the next character.
+     *
+     * @param char    Character to be drawn
+     * @param x       X coordinate to start drawing the character (left boundary)
+     * @param y       Y coordinate to draw the character. (top of the line)
+     * @param color   ARGB color for the character to be drawn.
+     * @param wrapper This is passed so you could draw with different fonts in quick succession if needed.
+     * @param italics This defines if the characters will have a front lean to them.
+     * @param scale   This defines the size of the character to be drawn.
+     * @return the width of the drawn character
      */
-    fun drawString(string: String, x: Float, y: Float, color: Int, format: Set<TextFormat>, scale: Float): Int {
-        val gg = SimpleGraphics.guiGraphics ?: return getStringWidth(string, format, scale)
-        val font = Minecraft.getInstance().font
-        val formatted = applyFormatCodes(string, format)
-        val shadow = format.shadow()
-        if (scale == 1f) {
-            gg.drawString(font, formatted, x.toInt(), y.toInt(), color, shadow)
+    private fun putChar(gg: GuiGraphics, char: Char, x: Float, y: Float, color: Int, wrapper: FontWrapper, italics: Boolean, scale: Float): Float {
+        // Fall back to the default char when this one has no glyph, draw nothing when neither has one
+        val c = if (wrapper.getTexture(char) != null) char else wrapper.defaultChar
+        val texture = wrapper.getTexture(c) ?: return 0f
+        // Width of the drawn character texture
+        val width = wrapper.getFontTextureSize()
+        // Height of the drawn character texture
+        val height = wrapper.getFontTextureSize()
+        // X position of the drawn character
+        val textureX = wrapper.getGlyphX(c)
+        // Y position of the drawn character
+        val textureY = wrapper.getGlyphY(c)
+        // The actual character glyph containing the actual character size and offsets.
+        val glyph = wrapper.getGlyph(c)
+        // In case any of the above fails to be set return 0 without adding anything to the buffer.
+        if (textureX == -1 || textureY == -1 || glyph == null) return 0f
+        // Scaled character dimensions.
+        val sWidth = (glyph.width * scale)
+        val sHeight = (glyph.height * scale)
+        // Character draw coordinate calculation based on scale
+        val x0 = x - (glyph.offsetX * scale)
+        val y1 = y + ((wrapper.fontLineOffset - glyph.offsetY) * scale)
+        val x1 = x0 + sWidth
+        val y0 = y1 - sHeight
+        // Texture coordinates calculation (0.0 - 1.0 depending on the position relative to the size of the full texture)
+        val u0 = textureX / width.toFloat()
+        val v0 = textureY / height.toFloat()
+        val u1 = (textureX + glyph.width) / width.toFloat()
+        val v1 = (textureY + glyph.height) / height.toFloat()
+        // The offset distance requires a tan calculation because merely adding a fixed value independent of the character's height would lead to slightly different angles for each character.
+        val italicsOffset = if (italics) glyph.height * tan(0.2181662f) else 0f
+        // Add character quad to the atlas page's buffer
+        val matrix = gg.pose().last().pose()
+        val buffer = gg.bufferSource().getBuffer(RenderType.text(texture))
+        buffer.putVertex(matrix, x0 + italicsOffset, y0, color, u0, v0)
+        buffer.putVertex(matrix, x0, y1, color, u0, v1)
+        buffer.putVertex(matrix, x1, y1, color, u1, v1)
+        buffer.putVertex(matrix, x1 + italicsOffset, y0, color, u1, v0)
+        // Return the final width of the character, including the spacing for the next character, while being scaled or bypassing scaling in case the scale is set to 1.
+        return glyph.dWidthX * scale
+    }
+
+    /**
+     * Extension of the previous draw(char), that just implements functionality for bold characters, depending on the available wrappers
+     */
+    private fun putChar(gg: GuiGraphics, char: Char, x: Float, y: Float, color: Int, italics: Boolean, bold: Boolean, scale: Float): Float {
+        return if (bold) {
+            putChar(gg, char, x + scale, y, color, wrapperPlain, italics, scale)
+            putChar(gg, char, x, y, color, wrapperPlain, italics, scale) + scale
         } else {
-            val pose = gg.pose()
-            pose.pushPose()
-            pose.translate(x, y, 0f)
-            pose.scale(scale, scale, 1f)
-            gg.drawString(font, formatted, 0, 0, color, shadow)
-            pose.popPose()
+            putChar(gg, char, x, y, color, wrapperPlain, italics, scale)
         }
-        return getStringWidth(string, format, scale)
+    }
+
+    /**
+     * Extension of the previous draw(char), that just implements functionality for shadowed characters.
+     */
+    private fun putChar(gg: GuiGraphics, c: Char, x: Float, y: Float, color: Int, italics: Boolean, bold: Boolean, shadow: Boolean, scale: Float): Float {
+        if (shadow) {
+            putChar(gg, c, x + scale, y + scale, shadowColor, italics, bold, scale)
+        }
+        return putChar(gg, c, x, y, color, italics, bold, scale)
+    }
+
+    /**
+     * Draws the given string with all the possible parameters applied to it.
+     */
+    fun drawString(string: String, x: Float, y: Float, color: Int, format: Set<TextFormat>, scale: Float): Int =
+        drawString(string = string, x = x, y = y, color = color, italic = format.italic(), bold = format.bold(), shadow = format.shadow(), underline = format.underline(), strikethrough = format.strikethrough(), scale = scale)
+
+    /**
+     * Draws the given string with all the possible parameters applied to it.
+     */
+    private fun drawString(string: String, x: Float, y: Float, color: Int, italic: Boolean, bold: Boolean, shadow: Boolean, underline: Boolean, strikethrough: Boolean, scale: Float): Int {
+        val gg = SimpleGraphics.guiGraphics ?: return getStringWidth(string, italic, bold, scale)
+        var stringSize = string.fold(0f) { currentX, char -> currentX + putChar(gg, char, x + currentX, y, color, italic, bold, shadow, scale) }
+        if (underline || strikethrough) {
+            putOverlayFormatting(gg = gg, x = x, y = y, width = stringSize, color = color, italic = italic, underline = underline, strikethrough = strikethrough, shadow = shadow, scale = scale)
+        }
+        // draw now so later fills and items layer over the text like LP1
+        gg.flush()
+        if (italic) stringSize += scale
+        return ceil(stringSize).toInt()
+    }
+
+    /**
+     * Adds the formatting lines to the buffer, for underline and strikethrough.
+     */
+    private fun putOverlayFormatting(gg: GuiGraphics, x: Float, y: Float, width: Float, color: Int, italic: Boolean, underline: Boolean, strikethrough: Boolean, shadow: Boolean, scale: Float) {
+        if (underline) {
+            val underlineY = (wrapperPlain.fontHeight - 1) * scale
+            if (shadow) putHorizontalLine(gg = gg, x = x + scale, y = y + underlineY + scale, width = width, thickness = scale, color = shadowColor, italics = italic)
+            putHorizontalLine(gg = gg, x = x, y = y + underlineY, width = width, thickness = scale, color = color, italics = italic)
+        }
+        if (strikethrough) {
+            val strikethroughY = ((wrapperPlain.fontHeight) / 2f) * scale
+            if (shadow) putHorizontalLine(gg = gg, x = x + scale, y = y + strikethroughY + scale, width = width, thickness = scale, color = shadowColor, italics = italic)
+            putHorizontalLine(gg = gg, x = x, y = y + strikethroughY, width = width, thickness = scale, color = color, italics = italic)
+        }
     }
 
     fun drawSpace(x: Float, y: Float, width: Int, color: Int, italic: Boolean, underline: Boolean, strikethrough: Boolean, shadow: Boolean, scale: Float): Int {
-        if (!underline && !strikethrough) return width
-        val gg = SimpleGraphics.guiGraphics ?: return width
-        // match the underline/strike rows vanilla Font draws for the words
-        val h = (Minecraft.getInstance().font.lineHeight * scale).toInt()
-        if (underline) {
-            gg.fill(x.toInt(), (y + h - 1).toInt(), (x + width).toInt(), (y + h).toInt(), color)
-        }
-        if (strikethrough) {
-            gg.fill(x.toInt(), (y + h / 2).toInt(), (x + width).toInt(), (y + h / 2 + 1).toInt(), color)
+        if (width > 0 && (underline || strikethrough)) {
+            val gg = SimpleGraphics.guiGraphics ?: return width
+            putOverlayFormatting(gg = gg, x = x, y = y, width = width.toFloat(), color = color, italic = italic, underline = underline, strikethrough = strikethrough, shadow = shadow, scale = scale)
+            gg.flush()
         }
         return width
     }
 
     fun drawCenteredString(string: String, x: Float, y: Float, color: Int, tags: Set<TextFormat>, scale: Float): Int {
-        val width = getStringWidth(string, tags, scale)
-        return drawString(string, x - width / 2f, y, color, tags, scale)
+        return drawString(string, x - (getStringWidth(string, tags, scale) / 2f), y, color, tags, scale)
     }
 
-    private fun applyFormatCodes(text: String, format: Set<TextFormat>): String {
-        if (format.isEmpty()) return text
-        val sb = StringBuilder()
-        if (format.italic()) sb.append('\u00a7').append('o')
-        if (format.bold()) sb.append('\u00a7').append('l')
-        if (format.underline()) sb.append('\u00a7').append('n')
-        if (format.strikethrough()) sb.append('\u00a7').append('m')
-        if (sb.isEmpty()) return text
-        sb.append(text)
-        return sb.toString()
+    // It's not being rounded because it's supposed to be floored.
+    fun getFontHeight(scale: Float = 1f): Int = (fontPlain.height * scale).toInt()
+
+    private fun getCharWidth(char: Char, scale: Float): Float {
+        val glyph = fontPlain.glyphs[char] ?: fontPlain.glyphs[fontPlain.defaultChar] ?: return 0f
+        return glyph.dWidthX * scale
     }
 
-    fun getFontHeight(scale: Float = 1f): Int = (wrapperPlain.fontHeight * scale).toInt()
+    private fun getCharWidth(char: Char, bold: Boolean, scale: Float): Float {
+        return if (bold) {
+            getCharWidth(char, scale) + 1
+        } else {
+            getCharWidth(char, scale)
+        }
+    }
 
     fun getStringWidth(string: String, italics: Boolean, bold: Boolean, scale: Float): Int {
-        val formatted = if (bold) "\u00a7l$string" else string
         val italicsOffset = if (italics) scale else 0f
-        return (Minecraft.getInstance().font.width(formatted) * scale + italicsOffset).toInt()
+        return (string.fold(0.0) { currentX, char -> currentX + getCharWidth(char, bold, scale) } + italicsOffset).toInt()
     }
 
     fun getStringWidth(string: String, tags: Set<TextFormat>, scale: Float): Int =
         getStringWidth(string, tags.italic(), tags.bold(), scale)
 
     fun getStringWidth(string: String): Int = getStringWidth(string = string, italics = false, bold = false, scale = 1f)
+
+    private fun putHorizontalLine(gg: GuiGraphics, x: Float, y: Float, width: Float, thickness: Float, color: Int, italics: Boolean) {
+        val italicsOffset = if (italics) thickness else 0f
+        val matrix = gg.pose().last().pose()
+        val buffer = gg.bufferSource().getBuffer(RenderType.gui())
+        buffer.putVertex(matrix, x, y, color)
+        buffer.putVertex(matrix, x, y + thickness, color)
+        buffer.putVertex(matrix, x + width + italicsOffset, y + thickness, color)
+        buffer.putVertex(matrix, x + width + italicsOffset, y, color)
+    }
 }
