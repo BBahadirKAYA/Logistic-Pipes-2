@@ -31,9 +31,8 @@ Core gameplay (placing pipes, routing, requesting, chassis modules, crafting) is
 
 ## Known Limitations
 
-- **Mod integrations disabled** — BuildCraft, IndustrialCraft 2, Thermal Dynamics, NEI, and similar integrations are stubbed out; most are waiting on upstream ports to 1.20.1.
+- **Some mod integrations missing**: JEI, Applied Energistics 2, CC: Tweaked, Storage Drawers and The One Probe work. BuildCraft, IndustrialCraft 2, Thermal and NEI support is not ported; most of those mods have no modern release.
 - **Items-in-transit rendering** — visible but still being polished.
-- **SideConfigDisplay** — not yet functional.
 - **No world upgrade path from 1.12.2 saves** — legacy data fixers are not ported; start on a 1.20.1 world.
 
 ## Planned

@@ -24,10 +24,8 @@ A high-level checkpoint of where the Forge 1.12.2 → NeoForge 1.20.1 port stand
 
 ## Deferred
 
-- **Third-party mod integrations** — BuildCraft, IndustrialCraft 2, ComputerCraft, Thermal (Dynamics/Expansion), NEI, EnderStorage, IronChest, OpenComputers, MCMultiPart. The 1.12-era stub layer was **removed** (their dummy behavior is constant-folded at the former call sites); re-adding any of these on a modern MC means a fresh integration against that mod's current API, not reviving the stubs. JEI is live.
+- **Third-party mod integrations** — BuildCraft, IndustrialCraft 2, Thermal (Dynamics/Expansion), NEI, EnderStorage, IronChest, OpenComputers, MCMultiPart. The 1.12-era stub layer was **removed** (their dummy behavior is constant-folded at the former call sites); re-adding any of these on a modern MC means a fresh integration against that mod's current API, not reviving the stubs. Live today: JEI, Applied Energistics 2 (items and fluids), CC: Tweaked, Storage Drawers and The One Probe.
 - **Legacy data fixers** — no upgrade path from 1.12.2 worlds; start a fresh 1.20.1 save.
-- **SideConfigDisplay** — not yet ported.
-- **HUD power level readout** — UI polish pending.
 - **Fabric loader support** — planned after the NeoForge port reaches feature parity (via Architectury).
 
 ## Forward-port surface (1.21+)
