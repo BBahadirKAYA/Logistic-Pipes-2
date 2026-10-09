@@ -16,6 +16,7 @@ follows [Semantic Versioning](https://semver.org/) where practical.
 - Pipe signs show again, on a wooden board as in LP1.
 - The request monitor's order tree stays inside its window.
 - Search and text fields in LP screens are visible again (orderer search, item picker, settings and more).
+- The Creative Tab Based Item Sink matches items on dedicated servers too.
 
 ## [0.0.3] - 2026-10-09
 

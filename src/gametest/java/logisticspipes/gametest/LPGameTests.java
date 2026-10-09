@@ -281,6 +281,33 @@ public class LPGameTests {
 		helper.succeed();
 	}
 
+	/** H3: the five chipped fluid pipes have a crafting recipe and a FLUID compiler program. */
+	@GameTest(template = "empty")
+	public static void fluidPipesCraftable(GameTestHelper helper) {
+		ServerLevel level = helper.getLevel();
+		var programs = logisticspipes.blocks.LogisticsProgramCompilerTileEntity.programByCategory
+				.get(logisticspipes.blocks.LogisticsProgramCompilerTileEntity.ProgrammCategories.FLUID);
+		for (Item pipe : new Item[] { LPItems.pipeFluidRequest.get(), LPItems.pipeFluidProvider.get(), LPItems.pipeFluidSatellite.get(),
+				LPItems.pipeFluidInsertion.get(), LPItems.pipeFluidExtractor.get() }) {
+			boolean recipe = level.getRecipeManager().getAllRecipesFor(RecipeType.CRAFTING).stream()
+					.anyMatch(r -> r.getResultItem(level.registryAccess()).is(pipe));
+			helper.assertTrue(recipe, "no crafting recipe for " + pipe);
+			helper.assertTrue(programs != null && programs.contains(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(pipe)),
+					"no FLUID program for " + pipe);
+		}
+		helper.succeed();
+	}
+
+	/** H2: the creative-tab sink compares against the item's first category tab. */
+	@GameTest(template = "empty")
+	public static void creativeTabNameFromRegistry(GameTestHelper helper) {
+		String iron = ItemIdentifier.get(new ItemStack(Items.IRON_INGOT)).getCreativeTabName();
+		String log = ItemIdentifier.get(new ItemStack(Items.OAK_LOG)).getCreativeTabName();
+		helper.assertTrue("ingredients".equals(iron), "iron ingot tab '" + iron + "'");
+		helper.assertTrue(log != null && !log.equals(iron), "oak log tab '" + log + "'");
+		helper.succeed();
+	}
+
 	/** ItemIdentifier keeps the whole tag (enchantments, names, potions, damage). */
 	@GameTest(template = "empty")
 	public static void itemIdentifierKeepsTags(GameTestHelper helper) {

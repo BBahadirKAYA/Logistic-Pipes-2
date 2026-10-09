@@ -496,8 +496,7 @@ public final class ItemIdentifier implements Comparable<ItemIdentifier>, ILPCCTy
 				try {
 					java.util.Collection<ItemStack> displayItems = tab.getDisplayItems();
 					if (displayItems.isEmpty()) {
-						tab.buildContents(params);
-						displayItems = tab.getDisplayItems();
+						displayItems = buildTabContents(tab, params);
 					}
 					for (ItemStack stack : displayItems) {
 						if (stack != null && !stack.isEmpty()) {
@@ -511,6 +510,31 @@ public final class ItemIdentifier implements Comparable<ItemIdentifier>, ILPCCTy
 			ItemIdentifier.creativeTabNameByItem = map;
 			return map;
 		}
+	}
+
+	/**
+	 * Forge's CreativeModeTab.buildContents goes through ForgeHooksClient, which a dedicated server cannot load.
+	 * Same steps without it: the tab's generator, then the mod bus event, deduplicated like Forge does.
+	 */
+	private static java.util.Collection<ItemStack> buildTabContents(net.minecraft.world.item.CreativeModeTab tab,
+			net.minecraft.world.item.CreativeModeTab.ItemDisplayParameters params) throws IllegalAccessException {
+		var key = BuiltInRegistries.CREATIVE_MODE_TAB.getResourceKey(tab).orElseThrow();
+		var entries = new net.minecraftforge.common.util.MutableHashedLinkedMap<ItemStack, net.minecraft.world.item.CreativeModeTab.TabVisibility>(
+				net.minecraft.world.item.ItemStackLinkedSet.TYPE_AND_TAG,
+				(stack, left, right) -> net.minecraft.world.item.CreativeModeTab.TabVisibility.PARENT_AND_SEARCH_TABS);
+		// the only field of this type; found by type since the name differs between dev (Mojmap) and SRG runtimes
+		for (java.lang.reflect.Field field : net.minecraft.world.item.CreativeModeTab.class.getDeclaredFields()) {
+			if (field.getType() == net.minecraft.world.item.CreativeModeTab.DisplayItemsGenerator.class) {
+				field.setAccessible(true);
+				((net.minecraft.world.item.CreativeModeTab.DisplayItemsGenerator) field.get(tab)).accept(params, entries::put);
+			}
+		}
+		net.minecraftforge.fml.ModLoader.get().postEvent(new net.minecraftforge.event.BuildCreativeModeTabContentsEvent(tab, key, params, entries));
+		List<ItemStack> stacks = new ArrayList<>();
+		for (var entry : entries) {
+			stacks.add(entry.getKey());
+		}
+		return stacks;
 	}
 
 	public String getCreativeTabName() {
