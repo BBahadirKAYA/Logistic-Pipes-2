@@ -9,6 +9,7 @@ follows [Semantic Versioning](https://semver.org/) where practical.
 ### Fixed
 - The Power Junction accepts Forge Energy from cables and other mods again.
 - Hoppers and other mods can insert into the Logistics Crafting Table.
+- Machine blocks have LP1's hardness again and need a pickaxe to drop.
 
 ## [0.0.3] - 2026-10-09
 

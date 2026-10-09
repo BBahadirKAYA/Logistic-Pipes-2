@@ -111,7 +111,7 @@ public class LogisticsSolidBlock extends Block implements EntityBlock {
 		// noOcclusion() is required so the BER receives a non-zero packedLight value.
 		// Without it Minecraft treats the block as fully opaque, stores sky-light = 0
 		// at its own position, and the BER renders pitch-black regardless of ambient light.
-		super(BlockBehaviour.Properties.of().strength(0.5F).noOcclusion());
+		super(BlockBehaviour.Properties.of().strength(6.0F).requiresCorrectToolForDrops().noOcclusion());
 		this.type = type;
 	}
 

@@ -199,6 +199,34 @@ public class LPGameTests {
 		helper.succeed();
 	}
 
+	/** LP1 machine blocks: Material.IRON, hardness 6; any pickaxe drops them, a bare hand drops nothing. */
+	@GameTest(template = "empty")
+	public static void solidBlocksNeedPickaxe(GameTestHelper helper) {
+		BlockPos pos = new BlockPos(1, 2, 2);
+		BlockPos abs = helper.absolutePos(pos);
+		ServerPlayer player = net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(helper.getLevel());
+		player.setGameMode(GameType.SURVIVAL);
+		for (String name : new String[] { "frame", "power_junction", "security_station", "crafting_table", "crafting_table_fuzzy",
+				"statistics_table", "power_provider_rf", "power_provider_eu", "power_provider_mj", "program_compiler" }) {
+			net.minecraft.world.level.block.Block block = net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(
+					new net.minecraft.resources.ResourceLocation(LPConstants.LP_MOD_ID, name));
+			BlockState state = block.defaultBlockState();
+			helper.assertTrue(state.getDestroySpeed(helper.getLevel(), abs) == 6.0F, name + " hardness " + state.getDestroySpeed(helper.getLevel(), abs));
+			helper.assertTrue(state.requiresCorrectToolForDrops(), name + " drops without a tool");
+			helper.assertTrue(new ItemStack(Items.WOODEN_PICKAXE).isCorrectToolForDrops(state), name + " not harvestable by a wooden pickaxe");
+			for (boolean pickaxe : new boolean[] { true, false }) {
+				helper.setBlock(pos, state);
+				player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, pickaxe ? new ItemStack(Items.WOODEN_PICKAXE) : ItemStack.EMPTY);
+				helper.assertTrue(player.gameMode.destroyBlock(abs), name + " destroyBlock refused");
+				List<ItemEntity> drops = helper.getLevel().getEntitiesOfClass(ItemEntity.class, new AABB(abs).inflate(2));
+				boolean dropped = drops.stream().anyMatch(e -> e.getItem().is(block.asItem()));
+				drops.forEach(ItemEntity::discard);
+				helper.assertTrue(dropped == pickaxe, name + (pickaxe ? " no drop with a pickaxe" : " dropped by hand"));
+			}
+		}
+		helper.succeed();
+	}
+
 	/** Orderer + dye keeps the link and gets LP1's colour variant; reset keeps the colour. */
 	@GameTest(template = "empty")
 	public static void ordererDyeKeepsLinkAndColour(GameTestHelper helper) {

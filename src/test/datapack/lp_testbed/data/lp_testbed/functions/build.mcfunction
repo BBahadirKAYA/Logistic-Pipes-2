@@ -67,7 +67,7 @@ setblock ~26 ~1 ~2 oak_sign[rotation=8]{front_text:{messages:['"D: provider"','"
 setblock ~28 ~1 ~2 oak_sign[rotation=8]{front_text:{messages:['"D: REQUEST"','"right-click pipe"','"order items +"','"Content button"']}}
 setblock ~30 ~1 ~2 oak_sign[rotation=8]{front_text:{messages:['"D: crafter"','"sticks show"','"as craftable"','""']}}
 
-# E: drops. Breaking each machine block drops the block.
+# E: drops. Pickaxe break drops the block; bare hand drops nothing (LP1 behaviour).
 setblock ~34 ~ ~2 logisticspipes:frame
 setblock ~35 ~ ~2 logisticspipes:power_junction
 setblock ~36 ~ ~2 logisticspipes:security_station
@@ -79,7 +79,7 @@ setblock ~41 ~ ~2 logisticspipes:power_provider_eu
 setblock ~42 ~ ~2 logisticspipes:power_provider_mj
 setblock ~43 ~ ~2 logisticspipes:program_compiler
 setblock ~34 ~ ~4 chest{Items:[{Slot:0b,id:"minecraft:wooden_pickaxe",Count:1b},{Slot:1b,id:"minecraft:iron_pickaxe",Count:1b}]}
-setblock ~34 ~1 ~4 oak_sign[rotation=8]{front_text:{messages:['"E: DROPS"','"break each:"','"drops itself"','""']}}
+setblock ~34 ~1 ~4 oak_sign[rotation=8]{front_text:{messages:['"E: DROPS"','"pickaxe: drops"','"hand: nothing"','""']}}
 
 # F: finite power. Junction starts with 500 LP and has no source; sorting stops when it runs dry and the pipes turn red.
 setblock ~47 ~ ~2 chest{Items:[{Slot:0b,id:"minecraft:cobblestone",Count:64b}]}
