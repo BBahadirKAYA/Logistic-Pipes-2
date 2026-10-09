@@ -98,6 +98,9 @@ public class GuiStatistics extends LogisticsBaseGuiScreen {
 
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+		if (hasSubGui()) {
+			return super.mouseScrolled(mouseX, mouseY, delta);
+		}
 		getActiveTab().onMouseScroll((int) delta);
 		return super.mouseScrolled(mouseX, mouseY, delta);
 	}

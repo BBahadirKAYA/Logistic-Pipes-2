@@ -137,9 +137,13 @@ public abstract class SubGuiScreen extends Screen implements ISubGuiControler, I
 		this.renderLabels(guiGraphics, mouseX, mouseY);
 		RenderSystem.enableDepthTest();
 		if (subGui != null) {
+			// commit the host's batched text and items, then clear depth so overlay and popup draw over all of it
+			guiGraphics.flush();
+			RenderSystem.clear(com.mojang.blaze3d.platform.GlConst.GL_DEPTH_BUFFER_BIT, Minecraft.ON_OSX);
 			if (!subGui.hasSubGui()) {
 				super.renderBackground(guiGraphics);
 			}
+			guiGraphics.flush();
 			subGui.render(guiGraphics, mouseX, mouseY, partialTicks);
 		}
 		renderToolTips(mouseX, mouseY, partialTicks);

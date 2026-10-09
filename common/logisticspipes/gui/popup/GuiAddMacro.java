@@ -563,6 +563,9 @@ public class GuiAddMacro extends SubGuiScreen implements IItemSearch {
 
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+		if (hasSubGui()) {
+			return super.mouseScrolled(mouseX, mouseY, delta);
+		}
 		if (delta > 0) {
 			wheelUp = (int) Math.max(1, delta);
 			wheelDown = 0;

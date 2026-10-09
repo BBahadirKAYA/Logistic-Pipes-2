@@ -600,7 +600,7 @@ public class GuiRequestTable extends LogisticsBaseGuiScreen implements IItemSear
 
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-		if (showRequest && itemDisplay != null) {
+		if (!hasSubGui() && showRequest && itemDisplay != null) {
 			itemDisplay.handleMouse(delta);
 		}
 		return super.mouseScrolled(mouseX, mouseY, delta);

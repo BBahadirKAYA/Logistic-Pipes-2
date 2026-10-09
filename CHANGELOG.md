@@ -17,6 +17,8 @@ follows [Semantic Versioning](https://semver.org/) where practical.
 - The request monitor's order tree stays inside its window.
 - Search and text fields in LP screens are visible again (orderer search, item picker, settings and more).
 - The Creative Tab Based Item Sink matches items on dedicated servers too.
+- The request table's request monitor shows your requests again (it stayed empty), with LP1's stone background and working zoom.
+- Popups cover the screen behind them; the mouse wheel scrolls the open popup only.
 
 ## [0.0.3] - 2026-10-09
 

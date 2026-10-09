@@ -29,7 +29,7 @@ public class RequestTableGui extends CoordinatesGuiProvider {
 		LogisticsTileGenericPipe tile = getTileAs(player.level(), LogisticsTileGenericPipe.class);
 		if (tile == null || !(tile.pipe instanceof PipeBlockRequestTable)) return null;
 		PipeBlockRequestTable table = (PipeBlockRequestTable) tile.pipe;
-		DummyContainer dummy = new DummyContainer(player.getInventory(), table.matrix);
+		DummyContainer dummy = new DummyContainer(player, table.matrix, table);
 		int i = 0;
 		for (int y = 0; y < 3; y++) {
 			for (int x = 0; x < 9; x++) {

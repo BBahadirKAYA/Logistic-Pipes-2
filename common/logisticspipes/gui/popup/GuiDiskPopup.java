@@ -168,6 +168,9 @@ public class GuiDiskPopup extends SubGuiScreen {
 
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+		if (hasSubGui()) {
+			return super.mouseScrolled(mouseX, mouseY, delta);
+		}
 		if (delta < 0) {
 			textList.scrollUp();
 		} else if (delta > 0) {

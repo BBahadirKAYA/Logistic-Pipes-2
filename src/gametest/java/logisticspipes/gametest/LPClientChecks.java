@@ -155,7 +155,17 @@ public final class LPClientChecks {
 					checkGuideBook(mc, "guide.missingDrawn", "lpcheck_guide_404.png", 3);
 					mc.setScreen(null);
 				}
-				case SETTLE_TICKS + 182 -> {
+				case SETTLE_TICKS + 182 -> startRequestStation(mc);
+				// routers need a few seconds to find each other before a request can route
+				case SETTLE_TICKS + 242 -> openRequestTable(mc);
+				case SETTLE_TICKS + 247 -> submitStickRequest(mc);
+				case SETTLE_TICKS + 257 -> openWatchedMonitor(mc);
+				// two rendered frames so the popup has drawn before the shot
+				case SETTLE_TICKS + 260 -> checkWatchedMonitor(mc);
+				case SETTLE_TICKS + 263 -> checkZoomedMonitor(mc);
+				case SETTLE_TICKS + 400 -> checkStickDelivery(mc);
+				case SETTLE_TICKS + 401 -> finishRequestStation(mc);
+				case SETTLE_TICKS + 403 -> {
 					logisticspipes.LogisticsPipes.log.info("LPCHECK DONE failures={}", failures);
 					mc.stop();
 				}
@@ -707,6 +717,183 @@ public final class LPClientChecks {
 		Screenshot.grab(mc.gameDirectory, "lpcheck_orderer.png", mc.getMainRenderTarget(),
 				msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO orderer screenshot: {}", msg.getString()));
 		mc.setScreen(null);
+	}
+
+	private static BlockPos requestBase;
+	private static logisticspipes.gui.orderer.GuiRequestTable requestGui;
+
+	/** Station D on the sky platform with a request table that has a crafting monitoring upgrade. */
+	private static void startRequestStation(Minecraft mc) {
+		var server = mc.getSingleplayerServer();
+		if (server == null || tubeBase == null) {
+			result("request.placed", false, "no platform");
+			return;
+		}
+		server.execute(() -> {
+			var sp = server.getPlayerList().getPlayer(mc.player.getUUID());
+			if (sp == null) return;
+			BlockPos b = tubeBase;
+			tubeCommand(sp, String.format("fill %d %d %d %d %d %d stone", b.getX() - 10, b.getY() - 1, b.getZ() - 10, b.getX() + 10, b.getY() - 1, b.getZ() + 6));
+			BlockPos r = requestBase = b.offset(-2, 0, -6);
+			requestBlock(sp, r, "chest{Items:[{Slot:0b,id:\"minecraft:oak_planks\",Count:32b}]}");
+			requestBlock(sp, r.offset(0, 0, 1), "logisticspipes:pipe{pipeIdName:\"logisticspipes:pipe_chassis_mk1\",\"modules.listSize\":1,\"modules.listItem.0\":{\"slotted_module.slot\":0,\"slotted_module.name\":\"provider\"}}");
+			requestBlock(sp, r.offset(0, 0, 2), "logisticspipes:power_junction");
+			requestBlock(sp, r.offset(0, 0, 3), "logisticspipes:creative_power_source");
+			requestBlock(sp, r.offset(1, 0, 1), "logisticspipes:pipe{pipeIdName:\"logisticspipes:pipe_transport_basic\"}");
+			requestBlock(sp, r.offset(2, 0, 1), "logisticspipes:pipe{pipeIdName:\"logisticspipes:pipe_request_table\"}");
+			requestBlock(sp, r.offset(3, 0, 1), "logisticspipes:pipe{pipeIdName:\"logisticspipes:pipe_transport_basic\"}");
+			requestBlock(sp, r.offset(4, 0, 0), "logisticspipes:crafting_table{matrixitemsCount:9,matrixitems:[{index:1,id:\"minecraft:oak_planks\",Count:1b},{index:4,id:\"minecraft:oak_planks\",Count:1b}]}");
+			requestBlock(sp, r.offset(4, 0, 1), "logisticspipes:pipe{pipeIdName:\"logisticspipes:pipe_crafting\",dummyInvitemsCount:11,dummyInvitems:[{index:1,id:\"minecraft:oak_planks\",Count:1b},{index:4,id:\"minecraft:oak_planks\",Count:1b},{index:9,id:\"minecraft:stick\",Count:4b}]}");
+			boolean monitoring = false;
+			if (sp.serverLevel().getBlockEntity(r.offset(2, 0, 1)) instanceof LogisticsTileGenericPipe tile
+					&& tile.pipe instanceof logisticspipes.pipes.PipeBlockRequestTable table) {
+				table.getOriginalUpgradeManager().inv.setItem(0, new net.minecraft.world.item.ItemStack(logisticspipes.LPRegistries.UPGRADE_CRAFTING_MONITORING.get()));
+				table.getOriginalUpgradeManager().inv.setChanged();
+				monitoring = table.getUpgradeManager().hasCraftingMonitoringUpgrade();
+			}
+			var placed = sp.serverLevel().getBlockEntity(r.offset(2, 0, 1));
+			result("request.placed", monitoring, "monitoring upgrade=" + monitoring + " at table: "
+					+ (placed instanceof LogisticsTileGenericPipe tile ? String.valueOf(tile.pipe) : String.valueOf(placed)));
+			// eye 1.62 above the floor, table centre 2.5 blocks north and 1.12 lower
+			sp.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, net.minecraft.world.item.ItemStack.EMPTY);
+			sp.teleportTo(sp.serverLevel(), r.getX() + 2.5, r.getY(), r.getZ() + 4, 180f, 24f);
+		});
+	}
+
+	private static void requestBlock(net.minecraft.server.level.ServerPlayer sp, BlockPos pos, String block) {
+		tubeCommand(sp, String.format("setblock %d %d %d %s", pos.getX(), pos.getY(), pos.getZ(), block));
+	}
+
+	/** Right-clicks the table like a player, so the server adds the player as a GUI watcher. */
+	private static void openRequestTable(Minecraft mc) {
+		if (requestBase == null) return;
+		BlockPos table = requestBase.offset(2, 0, 1);
+		var hit = new BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(table).add(0, 0, 0.5), Direction.SOUTH, table, false);
+		mc.gameMode.useItemOn(mc.player, net.minecraft.world.InteractionHand.MAIN_HAND, hit);
+	}
+
+	/** Same packet the table's Request button sends; sticks are crafted, so the order has a sub-tree. */
+	private static void submitStickRequest(Minecraft mc) {
+		requestGui = mc.screen instanceof logisticspipes.gui.orderer.GuiRequestTable gui ? gui : null;
+		result("request.guiOpens", requestGui != null, "screen=" + (mc.screen == null ? "none" : mc.screen.getClass().getSimpleName()));
+		if (requestGui == null) return;
+		var sticks = logisticspipes.utils.item.ItemIdentifier.get(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STICK)).makeStack(8);
+		logisticspipes.proxy.MainProxy.sendPacketToServer(logisticspipes.network.PacketHandler.getPacket(logisticspipes.network.packets.orderer.RequestSubmitPacket.class)
+				.setStack(sticks).setTilePos(requestGui._table.container).setDimension(requestGui.dimension));
+	}
+
+	/** The watched order reached the client; open its monitor the way the table's monitor button does. */
+	private static void openWatchedMonitor(Minecraft mc) {
+		if (requestGui == null) return;
+		var watched = requestGui._table.watchedRequests;
+		Integer id = watched.isEmpty() ? null : watched.keySet().iterator().next();
+		var orders = id == null ? null : watched.get(id).getValue2();
+		boolean tree = orders != null && !orders.isEmpty() && !orders.getSubOrders().isEmpty();
+		result("request.watched", tree, "watched=" + watched.size() + (orders == null ? "" : " roots=" + orders.size() + " subOrders=" + orders.getSubOrders().size()
+				+ " treeSize=" + orders.getTreeRootSize() + " resource=" + watched.get(id).getValue1()));
+		// dismiss the "Request successful" popup first, as the player does with OK
+		if (requestGui.hasSubGui()) requestGui.keyPressed(GLFW.GLFW_KEY_ESCAPE, 0, 0);
+		if (id != null) requestGui.setSubGui(new logisticspipes.gui.popup.RequestMonitorPopup(requestGui._table, id));
+	}
+
+	private static int treeGreen;
+
+	private static void checkWatchedMonitor(Minecraft mc) throws ReflectiveOperationException {
+		if (requestGui == null) return;
+		boolean drawn = mc.screen == requestGui && requestGui.hasSubGui()
+				&& requestGui.getSubGui() instanceof logisticspipes.gui.popup.RequestMonitorPopup popup && popup.getGuiGraphics() != null;
+		result("request.monitorDrawn", drawn, "screen=" + (mc.screen == requestGui) + " popup="
+				+ (requestGui.hasSubGui() ? requestGui.getSubGui().getClass().getSimpleName() : "none"));
+		Screenshot.grab(mc.gameDirectory, "lpcheck_request_monitor.png", mc.getMainRenderTarget(),
+				msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO request monitor screenshot: {}", msg.getString()));
+		if (!drawn) {
+			mc.setScreen(null);
+			return;
+		}
+		// LP1 tiles stone behind the tree; without it the request table shows through the map
+		int[] hole = monitorHolePixels(mc, requestGui.getSubGui());
+		result("request.monitorBackground", hole[0] > hole[2] * 7 / 10, "stone-grey " + hole[0] + "/" + hole[2]);
+		// the table's own text and item icons must not draw over the popup
+		result("request.popupCoversTable", hole[3] > hole[4] * 95 / 100, "plain frame band " + hole[3] + "/" + hole[4]);
+		treeGreen = hole[1];
+		int countBefore = requestGui.itemDisplay.getRequestCount();
+		requestGui.mouseScrolled(requestGui.width / 2.0, requestGui.height / 2.0, -1);
+		int countAfter = requestGui.itemDisplay.getRequestCount();
+		result("request.wheelStaysInPopup", countBefore == countAfter, "table request amount " + countBefore + " -> " + countAfter);
+	}
+
+	/** Zooming out draws the tree smaller, so less of the hole is green. */
+	private static void checkZoomedMonitor(Minecraft mc) throws ReflectiveOperationException {
+		if (requestGui == null || mc.screen != requestGui || !requestGui.hasSubGui()) return;
+		int[] hole = monitorHolePixels(mc, requestGui.getSubGui());
+		result("request.monitorZoomScales", treeGreen > 0 && hole[1] < treeGreen * 6 / 10, "green " + treeGreen + " -> " + hole[1]);
+		Screenshot.grab(mc.gameDirectory, "lpcheck_request_monitor_zoom.png", mc.getMainRenderTarget(),
+				msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO request monitor zoom screenshot: {}", msg.getString()));
+		mc.setScreen(null);
+	}
+
+	/** Stone-grey, tree-green and total pixel counts inside the monitor's map hole, then plain and total in the frame's top band. */
+	private static int[] monitorHolePixels(Minecraft mc, logisticspipes.utils.gui.SubGuiScreen popup) throws ReflectiveOperationException {
+		Field xField = logisticspipes.utils.gui.SubGuiScreen.class.getDeclaredField("xSize");
+		Field yField = logisticspipes.utils.gui.SubGuiScreen.class.getDeclaredField("ySize");
+		xField.setAccessible(true);
+		yField.setAccessible(true);
+		int left = (popup.width - xField.getInt(popup)) / 2, top = (popup.height - yField.getInt(popup)) / 2;
+		double scale = mc.getWindow().getGuiScale();
+		int x0 = (int) ((left + 22) * scale), x1 = (int) ((left + 234) * scale);
+		int y0 = (int) ((top + 23) * scale), y1 = (int) ((top + 164) * scale);
+		int grey = 0, green = 0, total = 0, band = 0, bandTotal = 0;
+		try (var image = Screenshot.takeScreenshot(mc.getMainRenderTarget())) {
+			// the frame's top band is plain (198,198,198) in gui_border.png
+			for (int y = (int) ((top + 3) * scale); y < (int) ((top + 15) * scale); y++) {
+				for (int x = x0; x < x1; x++) {
+					int p = image.getPixelRGBA(x, y);
+					bandTotal++;
+					if (Math.abs((p & 0xFF) - 198) < 8 && Math.abs(((p >> 8) & 0xFF) - 198) < 8 && Math.abs(((p >> 16) & 0xFF) - 198) < 8) band++;
+				}
+			}
+			for (int y = y0; y < y1; y++) {
+				for (int x = x0; x < x1; x++) {
+					int p = image.getPixelRGBA(x, y);
+					int a = p & 0xFF, g = (p >> 8) & 0xFF, c = (p >> 16) & 0xFF;
+					total++;
+					int max = Math.max(a, Math.max(g, c)), min = Math.min(a, Math.min(g, c));
+					if (max - min < 16 && min >= 55 && max <= 120) grey++;
+					if (g > 150 && a < 100 && c < 100) green++;
+				}
+			}
+		}
+		return new int[] { grey, green, total, band, bandTotal };
+	}
+
+	/** The crafted sticks arrive in the table and the finished order leaves the client's watch list. */
+	private static void checkStickDelivery(Minecraft mc) {
+		var server = mc.getSingleplayerServer();
+		if (server == null || requestBase == null) return;
+		BlockPos at = requestBase.offset(2, 0, 1);
+		int clientWatched = requestGui == null ? -1 : requestGui._table.watchedRequests.size();
+		server.execute(() -> {
+			int sticks = 0;
+			if (server.overworld().getBlockEntity(at) instanceof LogisticsTileGenericPipe tile
+					&& tile.pipe instanceof logisticspipes.pipes.PipeBlockRequestTable table) {
+				for (int i = 0; i < table.inv.getContainerSize(); i++) {
+					if (table.inv.getItem(i).is(net.minecraft.world.item.Items.STICK)) sticks += table.inv.getItem(i).getCount();
+				}
+			}
+			result("request.delivered", sticks >= 8 && clientWatched == 0, "sticks in table=" + sticks + " client watched=" + clientWatched);
+		});
+	}
+
+	private static void finishRequestStation(Minecraft mc) {
+		var server = mc.getSingleplayerServer();
+		if (server == null || tubeBase == null) return;
+		server.execute(() -> {
+			var sp = server.getPlayerList().getPlayer(mc.player.getUUID());
+			if (sp == null) return;
+			BlockPos b = tubeBase;
+			tubeCommand(sp, String.format("fill %d %d %d %d %d %d air", b.getX() - 10, b.getY() - 1, b.getZ() - 10, b.getX() + 10, b.getY() + 6, b.getZ() + 6));
+			sp.teleportTo(sp.serverLevel(), tubeReturn.x, tubeReturn.y, tubeReturn.z, tubeYaw, tubePitch);
+		});
 	}
 
 	/** H4: the fluid-type picker opens as a popup listing the registered fluids. */

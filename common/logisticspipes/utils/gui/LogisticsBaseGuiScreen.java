@@ -173,9 +173,13 @@ public abstract class LogisticsBaseGuiScreen extends AbstractContainerScreen imp
 		if (subGui != null) {
 			// In 1.20.1, Mouse hack removed — subGui renders directly
 			super.render(guiGraphics, 0, 0, partialTicks);
+			// commit the host's batched text and items, then clear depth so overlay and popup draw over all of it
+			guiGraphics.flush();
+			com.mojang.blaze3d.systems.RenderSystem.clear(com.mojang.blaze3d.platform.GlConst.GL_DEPTH_BUFFER_BIT, Minecraft.ON_OSX);
 			if (!subGui.hasSubGui()) {
 				super.renderBackground(guiGraphics);
 			}
+			guiGraphics.flush();
 			subGui.render(guiGraphics, mouseX, mouseY, partialTicks);
 		} else {
 			renderBackground(guiGraphics);

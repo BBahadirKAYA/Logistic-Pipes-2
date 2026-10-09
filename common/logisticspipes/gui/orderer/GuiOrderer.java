@@ -202,7 +202,9 @@ public abstract class GuiOrderer extends LogisticsBaseGuiScreen implements IItem
 
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-		itemDisplay.handleMouse(delta);
+		if (!hasSubGui()) {
+			itemDisplay.handleMouse(delta);
+		}
 		return super.mouseScrolled(mouseX, mouseY, delta);
 	}
 

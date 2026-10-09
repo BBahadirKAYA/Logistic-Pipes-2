@@ -308,6 +308,8 @@ public class RequestMonitorPopup extends SubGuiScreen {
 		getGuiGraphics().blit(RequestMonitorPopup.achievementTextures, leftSide, topSide, 0.0f, 0.0f, xSize, ySize, 256, 256);
 		// LP1 masked the map to the frame's hole with depth; clip to it instead
 		getGuiGraphics().enableScissor(leftSide + 22, topSide + 23, leftSide + 234, topSide + 164);
+		getGuiGraphics().pose().pushPose();
+		getGuiGraphics().pose().scale(zoom.zoom, zoom.zoom, 1);
 
 		guiTop *= 1 / zoom.zoom;
 		guiLeft *= 1 / zoom.zoom;
@@ -320,6 +322,17 @@ public class RequestMonitorPopup extends SubGuiScreen {
 
 		int innerLeftSide = leftSide + 16;
 		int innerTopSide = topSide + 17;
+
+		int moveBackgroundX = (mapX - minX) % 16;
+		int moveBackgroundY = (mapY - minY) % 16;
+		TextureAtlasSprite stone = getTexture(Blocks.STONE);
+		RenderSystem.setShaderColor(0.7F, 0.7F, 0.7F, 1.0F);
+		for (int yVar = 0; yVar * 16 - moveBackgroundY < zoom.bottomRenderBorder; yVar++) {
+			for (int xVar = 0; xVar * 16 - moveBackgroundX < zoom.rightRenderBorder; xVar++) {
+				getGuiGraphics().blit(innerLeftSide + xVar * 16 - moveBackgroundX, innerTopSide + yVar * 16 - moveBackgroundY, 0, 16, 16, stone);
+			}
+		}
+		RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
 
 		RenderSystem.disableBlend();
 		LinkedLogisticsOrderList list = _table.watchedRequests.get(orderId).getValue2();
@@ -342,6 +355,7 @@ public class RequestMonitorPopup extends SubGuiScreen {
 			getGuiGraphics().drawString(minecraft.font, s, innerLeftSide - mapX + 111 - minecraft.font.width(s) / 2, innerTopSide - mapY - 152, 16777215, true);
 		}
 		renderLinkedOrderListItems(list, innerLeftSide - mapX + 102, innerTopSide - mapY - 180, par1, par2);
+		getGuiGraphics().pose().popPose();
 		getGuiGraphics().disableScissor();
 		RenderSystem.enableBlend();
 
