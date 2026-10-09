@@ -40,16 +40,16 @@ public class HUDAdvancedExtractor implements IHUDModuleRenderer {
 		if (selected == 0) {
 			Direction d = module.getSneakyDirection();
 			if (gg != null) {
-				gg.drawString(mc.font, "Extract", -22, -22, 0xff404040, false);
-				gg.drawString(mc.font, "from:", -22, -9, 0xff404040, false);
-				gg.drawString(mc.font, d == null ? "DEFAULT" : d.name(), -22, 18, 0xff404040, false);
+				gg.drawString(mc.font, "Extract", -22, -22, 0xff000000, false);
+				gg.drawString(mc.font, "from:", -22, -9, 0xff000000, false);
+				gg.drawString(mc.font, d == null ? "DEFAULT" : d.name(), -22, 18, 0xff000000, false);
 			}
 		} else {
 			ItemStackRenderer.renderItemIdentifierStackListIntoGui(
 					ItemIdentifierStack.getListFromInventory(module.getFilterInventory()), null, 0, -25, -32, 3, 9, 18,
 					18, 100.0F, DisplayAmount.NEVER, false, shifted);
 			if (gg != null) {
-				gg.drawString(mc.font, module.getItemsIncluded().getValue() ? "Included" : "Excluded", -22, 25, 0xff404040, false);
+				gg.drawString(mc.font, module.getItemsIncluded().getValue() ? "Included" : "Excluded", -22, 25, 0xff000000, false);
 			}
 		}
 	}
@@ -76,6 +76,7 @@ public class HUDAdvancedExtractor implements IHUDModuleRenderer {
 		@Override
 		public void renderButton(boolean hover, boolean clicked, boolean shifted) {
 			Minecraft mc = Minecraft.getInstance();
+			LPGuiGraphics.setHudColor(false, hover ? 127 : 64);
 			LPGuiGraphics.drawGuiBackGround(mc,
 					posX * 2,
 					posY * 2,
@@ -87,6 +88,7 @@ public class HUDAdvancedExtractor implements IHUDModuleRenderer {
 					true,
 					false,
 					true);
+			LPGuiGraphics.setHudColor(false, 127);
 
 			int color;
 			if (hover && !clicked) {

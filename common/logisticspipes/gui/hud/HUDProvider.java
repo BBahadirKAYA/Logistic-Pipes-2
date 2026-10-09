@@ -99,7 +99,9 @@ public class HUDProvider extends BasicHUDGui {
 
 	@Override
 	public void renderHeadUpDisplay(double distance, boolean day, boolean shifted, Minecraft minecraft, IHUDConfig config) {
+		LPGuiGraphics.setHudColor(day, 64);
 		LPGuiGraphics.drawGuiBackGround(minecraft, -50, -55, 50, 55, 0, false);
+		LPGuiGraphics.setHudColor(day, 127);
 		super.renderHeadUpDisplay(distance, day, shifted, minecraft, config);
 
 		float scaleX = 1.125F;
@@ -112,7 +114,7 @@ public class HUDProvider extends BasicHUDGui {
 		ItemStackRenderer.renderItemIdentifierStackListIntoGui(pipe.itemListOrderer, null, pageB, -36, 23, 4, 4, 18, 18, itemStackRenderer);
 		net.minecraft.client.gui.GuiGraphics gg = logisticspipes.utils.gui.SimpleGraphics.guiGraphics;
 		if (gg != null) {
-			int textColor = day ? 0xff404040 : 0xff7f7f7f;
+			int textColor = 0xff000000;
 			gg.drawString(minecraft.font, String.format("(%d/%d)", page + 1, getMaxPage()), 9, -50, textColor, false);
 			gg.drawString(minecraft.font, String.format("(%d/%d)", pageB + 1, getMaxPageOrderer()), 9, 23, textColor, false);
 		}

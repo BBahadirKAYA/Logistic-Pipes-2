@@ -272,6 +272,12 @@ public final class LPGuiGraphics {
 		drawTexture16by16(mc, x, y, LPGuiGraphics.STATS_ICON);
 	}
 
+	/** LP1's glColor4b HUD tint: day darkens to 64/127, alpha is 0..127 like the signed byte. */
+	public static void setHudColor(boolean day, int alpha) {
+		float c = day ? 64 / 127F : 1F;
+		RenderSystem.setShaderColor(c, c, c, alpha / 127F);
+	}
+
 	public static void drawGuiBackGround(Minecraft mc, int guiLeft, int guiTop, int right, int bottom, float zLevel, boolean resetColor) {
 		LPGuiGraphics.drawGuiBackGround(mc, guiLeft, guiTop, right, bottom, zLevel, resetColor, true, true, true, true);
 	}

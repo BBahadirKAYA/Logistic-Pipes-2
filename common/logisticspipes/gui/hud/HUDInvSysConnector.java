@@ -21,11 +21,13 @@ public class HUDInvSysConnector extends BasicHUDGui {
 
 	@Override
 	public void renderHeadUpDisplay(double distance, boolean day, boolean shifted, Minecraft minecraft, IHUDConfig config) {
+		LPGuiGraphics.setHudColor(day, 64);
 		LPGuiGraphics.drawGuiBackGround(minecraft, -50, -50, 50, 50, 0, false);
+		LPGuiGraphics.setHudColor(day, 127);
 		super.renderHeadUpDisplay(distance, day, shifted, minecraft, config);
 		net.minecraft.client.gui.GuiGraphics gg = logisticspipes.utils.gui.SimpleGraphics.guiGraphics;
 		if (gg != null) {
-			int textColor = day ? 0xff404040 : 0xff7f7f7f;
+			int textColor = 0xff000000;
 			gg.drawString(minecraft.font, "Expected:", -28, -25, textColor, false);
 		}
 		ItemStackRenderer.renderItemIdentifierStackListIntoGui(pipe.displayList, null, 0, -37, -18, 3, 9, 18, 18, 100.0F, DisplayAmount.ALWAYS, false, shifted);

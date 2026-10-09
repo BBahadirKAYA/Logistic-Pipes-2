@@ -10,6 +10,7 @@ follows [Semantic Versioning](https://semver.org/) where practical.
 - The Power Junction accepts Forge Energy from cables and other mods again.
 - Hoppers and other mods can insert into the Logistics Crafting Table.
 - Machine blocks have LP1's hardness and map colour again and need a pickaxe to drop.
+- HUD glasses panels are see-through again with black text, like LP1.
 
 ## [0.0.3] - 2026-10-09
 

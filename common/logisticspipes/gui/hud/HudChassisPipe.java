@@ -92,17 +92,21 @@ public class HudChassisPipe extends BasicHUDGui {
 
 	@Override
 	public void renderHeadUpDisplay(double distance, boolean day, boolean shifted, Minecraft minecraft, IHUDConfig config) {
+		LPGuiGraphics.setHudColor(day, 64);
 		LPGuiGraphics.drawGuiBackGround(minecraft, -50, -50, 50, 50, 0, false);
+		LPGuiGraphics.setHudColor(day, 127);
 		super.renderHeadUpDisplay(distance, day, shifted, minecraft, config);
 		net.minecraft.client.gui.GuiGraphics gg = logisticspipes.utils.gui.SimpleGraphics.guiGraphics;
-		int textColor = day ? 0xff404040 : 0xff7f7f7f;
+		int textColor = 0xff000000;
 		if (selected != -1) {
 			LogisticsModule selectedmodule = pipe.getSubModule(selected);
 			if (selectedmodule == null) {
 				return;
 			}
 
+			LPGuiGraphics.setHudColor(false, 64);
 			LPGuiGraphics.drawGuiBackGround(minecraft, -23, -35, 45, 45, 0, false);
+			LPGuiGraphics.setHudColor(false, 127);
 
 			if (selectedmodule instanceof IHUDModuleHandler && ((IHUDModuleHandler) selectedmodule).getHUDRenderer() != null) {
 				((IHUDModuleHandler) selectedmodule).getHUDRenderer().renderContent(shifted);

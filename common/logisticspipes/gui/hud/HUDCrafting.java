@@ -24,14 +24,16 @@ public class HUDCrafting extends BasicHUDGui {
 
 	@Override
 	public void renderHeadUpDisplay(double d, boolean day, boolean shifted, Minecraft minecraft, IHUDConfig config) {
+		LPGuiGraphics.setHudColor(day, 64);
 		if (pipe.displayList.size() > 0) {
 			LPGuiGraphics.drawGuiBackGround(minecraft, -50, -28, 50, 30, 0, false);
 		} else {
 			LPGuiGraphics.drawGuiBackGround(minecraft, -30, -22, 30, 25, 0, false);
 		}
+		LPGuiGraphics.setHudColor(day, 127);
 		super.renderHeadUpDisplay(d, day, shifted, minecraft, config);
 		net.minecraft.client.gui.GuiGraphics gg = logisticspipes.utils.gui.SimpleGraphics.guiGraphics;
-		int textColor = day ? 0xff404040 : 0xff7f7f7f;
+		int textColor = 0xff000000;
 		if (gg != null) {
 			if (pipe.displayList.size() > 0) {
 				gg.drawString(minecraft.font, "Result:", -20, -25, textColor, false);
