@@ -585,6 +585,91 @@ public class LPGameTests {
 		});
 	}
 
+	/** Every high-speed tube, placed like a player would, comes back from a chunk reload with the same NBT in all its blocks. */
+	@GameTest(template = "empty", timeoutTicks = 300)
+	public static void everyTubeSurvivesColdLoad(GameTestHelper helper) {
+		List<Item> tubes = new ArrayList<>();
+		for (Item item : net.minecraft.core.registries.BuiltInRegistries.ITEM) {
+			if (item instanceof logisticspipes.items.ItemLogisticsPipe && LogisticsBlockGenericPipe.createPipe(item) instanceof logisticspipes.pipes.basic.CoreMultiBlockPipe) tubes.add(item);
+		}
+		helper.assertTrue(tubes.size() == 5, "expected 5 tubes, found " + tubes.size());
+		tubeStep(helper, tubes, 0, new ArrayList<>());
+	}
+
+	private static void tubeStep(GameTestHelper helper, List<Item> tubes, int index, List<String> failures) {
+		if (index >= tubes.size()) {
+			helper.assertTrue(failures.isEmpty(), String.join("; ", failures));
+			helper.succeed();
+			return;
+		}
+		Item item = tubes.get(index);
+		String name = String.valueOf(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item));
+		ServerLevel level = helper.getLevel();
+		// above the plot: tubes span up to 7 blocks and the empty template is 5x5x5
+		BlockPos floor = helper.absolutePos(new BlockPos(2, 20, 2));
+		BlockPos min = floor.offset(-8, 1, -8), max = floor.offset(8, 4, 8);
+		level.setBlock(floor, Blocks.STONE.defaultBlockState(), 3);
+		ServerPlayer player = net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(level);
+		player.moveTo(floor.getX() + 0.5, floor.getY() + 1, floor.getZ() + 3.5, 180f, 30f);
+		ItemStack stack = new ItemStack(item);
+		player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, stack);
+		stack.useOn(new net.minecraft.world.item.context.UseOnContext(player, net.minecraft.world.InteractionHand.MAIN_HAND,
+				new net.minecraft.world.phys.BlockHitResult(Vec3.atCenterOf(floor).add(0, 0.5, 0), net.minecraft.core.Direction.UP, floor, false)));
+		player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+		helper.runAfterDelay(3, () -> {
+			java.util.Map<BlockPos, CompoundTag> before = new java.util.HashMap<>();
+			Class<?> type = null;
+			BlockPos mainPos = null;
+			for (BlockPos pos : BlockPos.betweenClosed(min, max)) {
+				net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(pos);
+				if (be instanceof LogisticsTileGenericPipe tile && tile.pipe instanceof logisticspipes.pipes.basic.CoreMultiBlockPipe) {
+					type = tile.pipe.getClass();
+					mainPos = pos.immutable();
+				}
+				if (be instanceof LogisticsTileGenericPipe || be instanceof logisticspipes.pipes.basic.LogisticsTileGenericSubMultiBlock) before.put(pos.immutable(), be.saveWithFullMetadata());
+			}
+			if (mainPos == null) {
+				failures.add(name + ": not placed (" + before.size() + " block entities)");
+				clearTubeArea(level, min, max, floor);
+				tubeStep(helper, tubes, index + 1, failures);
+				return;
+			}
+			// unload everything first, then reload: neighbours must not see a half-loaded tube
+			for (BlockPos pos : before.keySet()) {
+				net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(pos);
+				be.onChunkUnloaded();
+				level.removeBlockEntity(pos);
+			}
+			for (var e : before.entrySet()) {
+				net.minecraft.world.level.block.entity.BlockEntity reloaded = net.minecraft.world.level.block.entity.BlockEntity.loadStatic(e.getKey(), level.getBlockState(e.getKey()), e.getValue());
+				if (reloaded == null) failures.add(name + ": loadStatic null at " + e.getKey());
+				else level.setBlockEntity(reloaded);
+			}
+			Class<?> expected = type;
+			BlockPos main = mainPos;
+			helper.runAfterDelay(3, () -> {
+				if (!(level.getBlockEntity(main) instanceof LogisticsTileGenericPipe fresh) || fresh.pipe == null || fresh.pipe.getClass() != expected) {
+					failures.add(name + ": main pipe lost after reload");
+				} else if (!fresh.isInitialized()) {
+					failures.add(name + ": not initialized after reload");
+				}
+				for (var e : before.entrySet()) {
+					net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(e.getKey());
+					CompoundTag after = be == null ? null : be.saveWithFullMetadata();
+					if (after == null) failures.add(name + ": block entity gone at " + e.getKey());
+					else if (!after.equals(e.getValue())) failures.add(name + ": NBT changed at " + e.getKey() + " " + tagDiff(e.getValue(), after));
+				}
+				clearTubeArea(level, min, max, floor);
+				tubeStep(helper, tubes, index + 1, failures);
+			});
+		});
+	}
+
+	private static void clearTubeArea(ServerLevel level, BlockPos min, BlockPos max, BlockPos floor) {
+		for (BlockPos pos : BlockPos.betweenClosed(min, max)) level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
+		level.setBlock(floor, Blocks.AIR.defaultBlockState(), 3);
+	}
+
 	private static String tagDiff(CompoundTag a, CompoundTag b) {
 		List<String> keys = new ArrayList<>();
 		for (String k : a.getAllKeys()) if (!java.util.Objects.equals(a.get(k), b.get(k))) keys.add(k + "=" + a.get(k) + "->" + b.get(k));
