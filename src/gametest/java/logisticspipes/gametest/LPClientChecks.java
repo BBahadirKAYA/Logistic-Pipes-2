@@ -140,7 +140,10 @@ public final class LPClientChecks {
 							msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO disk screenshot: {}", msg.getString()));
 					mc.setScreen(null);
 				}
-				case SETTLE_TICKS + 162 -> {
+				case SETTLE_TICKS + 161 -> openOrderer(mc);
+				case SETTLE_TICKS + 163 -> checkOrderer(mc);
+				case SETTLE_TICKS + 165 -> checkOrdererDrawn(mc);
+				case SETTLE_TICKS + 167 -> {
 					logisticspipes.LogisticsPipes.log.info("LPCHECK DONE failures={}", failures);
 					mc.stop();
 				}
@@ -646,6 +649,52 @@ public final class LPClientChecks {
 		name2.setAccessible(true);
 		String name = name1.get(diskPopup) + "|" + name2.get(diskPopup);
 		result("disk.nameTypes", "Diskx|a".equals(name), "before|after cursor='" + name + "'");
+	}
+
+	private static logisticspipes.gui.orderer.NormalGuiOrderer orderer;
+
+	/** No pipe at 0,0,0: the refresh packet finds none and returns. */
+	private static void openOrderer(Minecraft mc) {
+		orderer = new logisticspipes.gui.orderer.NormalGuiOrderer(0, 0, 0, mc.level.dimension().location(), mc.player);
+		mc.setScreen(orderer);
+	}
+
+	/** The orderer search bar takes focus on click, types and filters. */
+	private static void checkOrderer(Minecraft mc) throws ReflectiveOperationException {
+		Field searchField = logisticspipes.gui.orderer.GuiOrderer.class.getDeclaredField("search");
+		searchField.setAccessible(true);
+		InputBar search = (InputBar) searchField.get(orderer);
+		int left = orderer.getGuiLeft(), bottom = orderer.getGuiTop() + 240;
+		orderer.mouseClicked(left + 20, bottom - 70, 0);
+		typeInto(orderer, "irn");
+		orderer.keyPressed(GLFW.GLFW_KEY_BACKSPACE, 0, 0);
+		typeInto(orderer, "on");
+		String text = search.getText();
+		result("orderer.searchTypes", "iron".equals(text), "focused=" + search.isFocused() + " text='" + text + "'");
+		boolean iron = orderer.itemSearched(logisticspipes.utils.item.ItemIdentifier.get(net.minecraft.world.item.Items.IRON_INGOT, 0, null));
+		boolean log = orderer.itemSearched(logisticspipes.utils.item.ItemIdentifier.get(net.minecraft.world.item.Items.OAK_LOG, 0, null));
+		result("orderer.searchFilters", iron && !log, "iron shown=" + iron + " log shown=" + log);
+	}
+
+	/** The orderer search box is drawn: right of the text its inner fill is black. */
+	private static void checkOrdererDrawn(Minecraft mc) {
+		double scale = mc.getWindow().getGuiScale();
+		int left = orderer.getGuiLeft(), bottom = orderer.getGuiTop() + 240;
+		int x0 = (int) ((left + 60) * scale), x1 = (int) ((left + 200) * scale);
+		int y0 = (int) ((bottom - 76) * scale), y1 = (int) ((bottom - 65) * scale);
+		int black = 0, total = 0;
+		try (var image = Screenshot.takeScreenshot(mc.getMainRenderTarget())) {
+			for (int y = y0; y < y1; y++) {
+				for (int x = x0; x < x1; x++) {
+					total++;
+					if ((image.getPixelRGBA(x, y) & 0xFFFFFF) == 0) black++;
+				}
+			}
+		}
+		result("orderer.searchDrawn", black > total / 2, "black " + black + "/" + total);
+		Screenshot.grab(mc.gameDirectory, "lpcheck_orderer.png", mc.getMainRenderTarget(),
+				msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO orderer screenshot: {}", msg.getString()));
+		mc.setScreen(null);
 	}
 
 	/** The HUD renderer must have picked up all three pipes as panels. */
