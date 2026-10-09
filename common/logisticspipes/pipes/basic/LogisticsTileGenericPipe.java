@@ -174,7 +174,8 @@ public class LogisticsTileGenericPipe extends LPMicroblockTileEntity
 	@Override
 	public void onLoad() {
 		super.onLoad();
-		initialized = false;
+		// client onLoad runs a tick after the state packet already initialized this fresh tile
+		if (level == null || !level.isClientSide) initialized = false;
 		tileBuffer = null;
 		bindPipe();
 		if (pipe != null) {

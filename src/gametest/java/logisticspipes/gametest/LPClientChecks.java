@@ -829,7 +829,46 @@ public final class LPClientChecks {
 		result("request.monitorZoomScales", treeGreen > 0 && hole[1] < treeGreen * 6 / 10, "green " + treeGreen + " -> " + hole[1]);
 		Screenshot.grab(mc.gameDirectory, "lpcheck_request_monitor_zoom.png", mc.getMainRenderTarget(),
 				msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO request monitor zoom screenshot: {}", msg.getString()));
+		checkSaveTreeImage(mc, requestGui.getSubGui());
 		mc.setScreen(null);
+	}
+
+	/** The popup's "Save as Image" button writes a PNG of the whole tree to screenshots/. */
+	private static void checkSaveTreeImage(Minecraft mc, logisticspipes.utils.gui.SubGuiScreen popup) {
+		java.io.File dir = new java.io.File(mc.gameDirectory, "screenshots");
+		java.io.File[] before = dir.listFiles((d, n) -> n.endsWith("_tree.png") || n.matches(".*_tree_\\d+\\.png"));
+		java.util.Set<String> old = new java.util.HashSet<>();
+		if (before != null) for (java.io.File f : before) old.add(f.getName());
+		var button = popup.children().stream()
+				.filter(c -> c instanceof net.minecraft.client.gui.components.AbstractButton b && b.getMessage().getString().equals("Save as Image"))
+				.map(c -> (net.minecraft.client.gui.components.AbstractButton) c).findFirst();
+		if (button.isEmpty()) {
+			result("request.saveImage", false, "no Save as Image button");
+			return;
+		}
+		button.get().onPress();
+		java.io.File[] after = dir.listFiles((d, n) -> (n.endsWith("_tree.png") || n.matches(".*_tree_\\d+\\.png")) && !old.contains(n));
+		if (after == null || after.length == 0) {
+			result("request.saveImage", false, "no new _tree.png");
+			return;
+		}
+		int green = 0, drawn = 0, total = 0;
+		try (var in = new java.io.FileInputStream(after[0]); var image = com.mojang.blaze3d.platform.NativeImage.read(in)) {
+			for (int y = 0; y < image.getHeight(); y++) {
+				for (int x = 0; x < image.getWidth(); x++) {
+					int p = image.getPixelRGBA(x, y);
+					int r = p & 0xFF, g = (p >> 8) & 0xFF, b = (p >> 16) & 0xFF;
+					total++;
+					// clear colour is 0.15 grey (38,38,38)
+					if (Math.abs(r - 38) > 6 || Math.abs(g - 38) > 6 || Math.abs(b - 38) > 6) drawn++;
+					if (g > 150 && r < 100 && b < 100) green++;
+				}
+			}
+		} catch (java.io.IOException e) {
+			result("request.saveImage", false, "unreadable " + after[0].getName() + ": " + e);
+			return;
+		}
+		result("request.saveImage", green > 0 && drawn > 200, after[0].getName() + " green " + green + " drawn " + drawn + "/" + total);
 	}
 
 	/** Stone-grey, tree-green and total pixel counts inside the monitor's map hole, then plain and total in the frame's top band. */
