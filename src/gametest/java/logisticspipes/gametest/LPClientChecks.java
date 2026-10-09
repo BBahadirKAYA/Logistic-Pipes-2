@@ -143,7 +143,19 @@ public final class LPClientChecks {
 				case SETTLE_TICKS + 161 -> openOrderer(mc);
 				case SETTLE_TICKS + 163 -> checkOrderer(mc);
 				case SETTLE_TICKS + 165 -> checkOrdererDrawn(mc);
-				case SETTLE_TICKS + 167 -> {
+				case SETTLE_TICKS + 167 -> openFluidPicker(mc);
+				case SETTLE_TICKS + 169 -> checkFluidPicker(mc);
+				case SETTLE_TICKS + 170 -> openGuideBook();
+				case SETTLE_TICKS + 173 -> checkGuideBook(mc, "guide.menuDrawn", "lpcheck_guide_menu.png", 100);
+				case SETTLE_TICKS + 174 -> guidePage("/dev_zero_guides/active_routing.md");
+				case SETTLE_TICKS + 177 -> checkGuideBook(mc, "guide.pageDrawn", "lpcheck_guide_page.png", 100);
+				// a missing page opens LP1's 404 page, the only shipped guide image
+				case SETTLE_TICKS + 178 -> guidePage("/lpcheck_missing.md");
+				case SETTLE_TICKS + 181 -> {
+					checkGuideBook(mc, "guide.missingDrawn", "lpcheck_guide_404.png", 3);
+					mc.setScreen(null);
+				}
+				case SETTLE_TICKS + 182 -> {
 					logisticspipes.LogisticsPipes.log.info("LPCHECK DONE failures={}", failures);
 					mc.stop();
 				}
@@ -695,6 +707,70 @@ public final class LPClientChecks {
 		Screenshot.grab(mc.gameDirectory, "lpcheck_orderer.png", mc.getMainRenderTarget(),
 				msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO orderer screenshot: {}", msg.getString()));
 		mc.setScreen(null);
+	}
+
+	/** H4: the fluid-type picker opens as a popup listing the registered fluids. */
+	private static void openFluidPicker(Minecraft mc) {
+		openPopupHost(mc);
+		logisticspipes.proxy.MainProxy.proxy.openFluidSelectGui(0);
+	}
+
+	private static void checkFluidPicker(Minecraft mc) throws ReflectiveOperationException {
+		boolean open = popupHost.hasSubGui() && popupHost.getSubGui() instanceof logisticspipes.gui.popup.SelectItemOutOfList;
+		int size = -1;
+		boolean water = false;
+		if (open) {
+			Field candidate = logisticspipes.gui.popup.SelectItemOutOfList.class.getDeclaredField("candidate");
+			candidate.setAccessible(true);
+			List<?> list = (List<?>) candidate.get(popupHost.getSubGui());
+			size = list.size();
+			var waterId = logisticspipes.utils.FluidIdentifier.get(new net.minecraftforge.fluids.FluidStack(net.minecraft.world.level.material.Fluids.WATER, 1000)).getItemIdentifier();
+			water = list.stream().anyMatch(o -> ((logisticspipes.utils.item.ItemIdentifierStack) o).getItem().equals(waterId));
+		}
+		result("fluidPicker.opens", open && water, "open=" + open + " fluids=" + size + " water=" + water);
+		Screenshot.grab(mc.gameDirectory, "lpcheck_fluidpicker.png", mc.getMainRenderTarget(),
+				msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO fluid picker screenshot: {}", msg.getString()));
+		mc.setScreen(null);
+	}
+
+	/** H1: setScreen(null) skips onClose, so the book state is not saved to the held item. */
+	private static void openGuideBook() {
+		network.rs485.logisticspipes.guidebook.ItemGuideBook.openGuideBook(net.minecraft.world.InteractionHand.MAIN_HAND,
+				new net.minecraft.world.item.ItemStack(logisticspipes.LPItems.getItemGuideBook()));
+	}
+
+	private static void guidePage(String page) throws ReflectiveOperationException {
+		var book = Minecraft.getInstance().screen;
+		java.lang.reflect.Method change = book.getClass().getDeclaredMethod("changePage", String.class);
+		change.setAccessible(true);
+		change.invoke(book, page);
+	}
+
+	/** Page contents draw light text and images over the dark pattern; a full-width image fills over a third. */
+	private static void checkGuideBook(Minecraft mc, String name, String shot, int minFraction) throws ReflectiveOperationException {
+		if (!(mc.screen instanceof network.rs485.logisticspipes.gui.guidebook.GuiGuideBook book)) {
+			result(name, false, "screen=" + mc.screen);
+			return;
+		}
+		Field areaField = book.getClass().getDeclaredField("visibleArea");
+		areaField.setAccessible(true);
+		var area = (network.rs485.logisticspipes.util.math.MutableRectangle) areaField.get(book);
+		double scale = mc.getWindow().getGuiScale();
+		int x0 = (int) (area.getX0() * scale), x1 = (int) (area.getX1() * scale);
+		int y0 = (int) (area.getY0() * scale), y1 = (int) (area.getY1() * scale);
+		int bright = 0, total = 0;
+		try (var image = Screenshot.takeScreenshot(mc.getMainRenderTarget())) {
+			for (int y = y0; y < y1; y++) {
+				for (int x = x0; x < x1; x++) {
+					int p = image.getPixelRGBA(x, y);
+					total++;
+					if (Math.max(p & 0xFF, Math.max((p >> 8) & 0xFF, (p >> 16) & 0xFF)) > 160) bright++;
+				}
+			}
+		}
+		result(name, bright > total / minFraction, "bright " + bright + "/" + total);
+		Screenshot.grab(mc.gameDirectory, shot, mc.getMainRenderTarget(),
+				msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO guide screenshot: {}", msg.getString()));
 	}
 
 	/** The HUD renderer must have picked up all three pipes as panels. */
