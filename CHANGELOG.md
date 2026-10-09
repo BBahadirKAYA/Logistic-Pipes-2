@@ -20,6 +20,7 @@ follows [Semantic Versioning](https://semver.org/) where practical.
 - The request table's request monitor shows your requests again (it stayed empty), with LP1's stone background and working zoom.
 - Popups cover the screen behind them; the mouse wheel scrolls the open popup only.
 - Newly placed pipes show signs and other server updates right away (before, some only appeared after rejoining).
+- HUD glasses: the extractor panel text is black like the other panels, and long mod names in the mod sink panel are cut to fit.
 
 ## [0.0.3] - 2026-10-09
 

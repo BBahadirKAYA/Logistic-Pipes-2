@@ -146,6 +146,7 @@ public final class LPClientChecks {
 				case SETTLE_TICKS + 166 -> {
 					checkOrdererPageKeys(mc);
 					checkClientRecipeList(mc);
+					checkHudModuleText(mc);
 				}
 				case SETTLE_TICKS + 167 -> openFluidPicker(mc);
 				case SETTLE_TICKS + 169 -> checkFluidPicker(mc);
@@ -737,6 +738,37 @@ public final class LPClientChecks {
 			if (items.size() == 100) break;
 		}
 		orderer.itemDisplay.setItemList(items);
+	}
+
+	/** Module HUD text as LP1 draws it: black async extractor lines, mod sink names cut to 12 characters. */
+	private static void checkHudModuleText(Minecraft mc) {
+		List<String> texts = new ArrayList<>();
+		List<Integer> colours = new ArrayList<>();
+		var recorder = new net.minecraft.client.gui.GuiGraphics(mc, mc.renderBuffers().bufferSource()) {
+			@Override
+			public int drawString(net.minecraft.client.gui.Font font, String text, int x, int y, int colour, boolean shadow) {
+				texts.add(text);
+				colours.add(colour);
+				return 0;
+			}
+		};
+		var previous = logisticspipes.utils.gui.SimpleGraphics.guiGraphics;
+		logisticspipes.utils.gui.SimpleGraphics.guiGraphics = recorder;
+		try {
+			var extractor = new network.rs485.logisticspipes.module.AsyncExtractorModule();
+			extractor.getHUDRenderer().renderContent(false);
+			String extractorText = texts + " " + colours.stream().map(Integer::toHexString).toList();
+			boolean extractorOk = texts.equals(List.of("Extract", "from:", "DEFAULT")) && colours.stream().allMatch(c -> (c & 0xFFFFFF) == 0);
+			texts.clear();
+			colours.clear();
+			var sink = new logisticspipes.modules.ModuleModBasedItemSink();
+			sink.modList.replaceContent(List.of("averyveryverylongmodid", "short"));
+			sink.getHUDRenderer().renderContent(false);
+			boolean sinkOk = texts.equals(List.of("averyveryver", "short"));
+			result("hud.moduleText", extractorOk && sinkOk, "extractor " + extractorText + ", mod sink " + texts);
+		} finally {
+			logisticspipes.utils.gui.SimpleGraphics.guiGraphics = previous;
+		}
 	}
 
 	/** The request table's client half reads the synced client recipe list; it must hold LP's own recipes. */
