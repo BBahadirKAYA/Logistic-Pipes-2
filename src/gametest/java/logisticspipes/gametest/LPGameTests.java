@@ -670,6 +670,32 @@ public class LPGameTests {
 		level.setBlock(floor, Blocks.AIR.defaultBlockState(), 3);
 	}
 
+	/** LP1 mayPlace: a pipe is not placed into a mob, and is placed once the space is clear. */
+	@GameTest(template = "empty")
+	public static void pipePlacementRespectsMobs(GameTestHelper helper) {
+		ServerLevel level = helper.getLevel();
+		BlockPos floor = helper.absolutePos(new BlockPos(2, 1, 2));
+		BlockPos target = floor.above();
+		level.setBlock(floor, Blocks.STONE.defaultBlockState(), 3);
+		net.minecraft.world.entity.Entity pig = helper.spawn(net.minecraft.world.entity.EntityType.PIG, new BlockPos(2, 2, 2));
+		boolean blocked = !placeWithPlayer(level, floor) && !(level.getBlockEntity(target) instanceof LogisticsTileGenericPipe);
+		pig.discard();
+		boolean placed = placeWithPlayer(level, floor) && level.getBlockEntity(target) instanceof LogisticsTileGenericPipe;
+		helper.assertTrue(blocked && placed, "refused with pig=" + blocked + " placed when clear=" + placed);
+		helper.succeed();
+	}
+
+	private static boolean placeWithPlayer(ServerLevel level, BlockPos floor) {
+		ServerPlayer player = net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(level);
+		player.moveTo(floor.getX() + 0.5, floor.getY() + 1, floor.getZ() + 3.5, 180f, 30f);
+		ItemStack stack = new ItemStack(LPItems.pipeBasic.get());
+		player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, stack);
+		var result = stack.useOn(new net.minecraft.world.item.context.UseOnContext(player, net.minecraft.world.InteractionHand.MAIN_HAND,
+				new net.minecraft.world.phys.BlockHitResult(Vec3.atCenterOf(floor).add(0, 0.5, 0), net.minecraft.core.Direction.UP, floor, false)));
+		player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+		return result.consumesAction();
+	}
+
 	private static String tagDiff(CompoundTag a, CompoundTag b) {
 		List<String> keys = new ArrayList<>();
 		for (String k : a.getAllKeys()) if (!java.util.Objects.equals(a.get(k), b.get(k))) keys.add(k + "=" + a.get(k) + "->" + b.get(k));

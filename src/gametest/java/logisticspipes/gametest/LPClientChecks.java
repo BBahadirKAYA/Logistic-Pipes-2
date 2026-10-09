@@ -143,6 +143,10 @@ public final class LPClientChecks {
 				case SETTLE_TICKS + 161 -> openOrderer(mc);
 				case SETTLE_TICKS + 163 -> checkOrderer(mc);
 				case SETTLE_TICKS + 165 -> checkOrdererDrawn(mc);
+				case SETTLE_TICKS + 166 -> {
+					checkOrdererPageKeys(mc);
+					checkClientRecipeList(mc);
+				}
 				case SETTLE_TICKS + 167 -> openFluidPicker(mc);
 				case SETTLE_TICKS + 169 -> checkFluidPicker(mc);
 				case SETTLE_TICKS + 170 -> openGuideBook();
@@ -716,6 +720,49 @@ public final class LPClientChecks {
 		result("orderer.searchDrawn", black > total / 2, "black " + black + "/" + total);
 		Screenshot.grab(mc.gameDirectory, "lpcheck_orderer.png", mc.getMainRenderTarget(),
 				msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO orderer screenshot: {}", msg.getString()));
+		// 100 items for the page-key check; the next frame computes maxPage
+		try {
+			Field searchField = logisticspipes.gui.orderer.GuiOrderer.class.getDeclaredField("search");
+			searchField.setAccessible(true);
+			InputBar search = (InputBar) searchField.get(orderer);
+			search.setText("");
+			search.setFocused(false);
+		} catch (ReflectiveOperationException e) {
+			logisticspipes.LogisticsPipes.log.info("LPCHECK INFO orderer search reset failed: {}", e.toString());
+		}
+		List<logisticspipes.utils.item.ItemIdentifierStack> items = new java.util.ArrayList<>();
+		for (net.minecraft.world.item.Item item : net.minecraft.core.registries.BuiltInRegistries.ITEM) {
+			if (item == net.minecraft.world.item.Items.AIR) continue;
+			items.add(logisticspipes.utils.item.ItemIdentifier.get(item, 0, null).makeStack(1));
+			if (items.size() == 100) break;
+		}
+		orderer.itemDisplay.setItemList(items);
+	}
+
+	/** The request table's client half reads the synced client recipe list; it must hold LP's own recipes. */
+	private static void checkClientRecipeList(Minecraft mc) {
+		var recipes = logisticspipes.utils.CraftingUtil.getRecipeList(mc.level);
+		long pipes = recipes.stream().filter(r -> r.getResultItem(mc.level.registryAccess()).is(logisticspipes.LPItems.pipeBasic.get())).count();
+		result("recipes.clientList", pipes > 0, recipes.size() + " crafting recipes, " + pipes + " for pipe_basic");
+	}
+
+	/** PgDn and PgUp page through the orderer's item list; PgUp on page 1 wraps to the last page. */
+	private static void checkOrdererPageKeys(Minecraft mc) throws ReflectiveOperationException {
+		Field pageField = logisticspipes.utils.gui.ItemDisplay.class.getDeclaredField("page");
+		Field maxField = logisticspipes.utils.gui.ItemDisplay.class.getDeclaredField("maxPage");
+		pageField.setAccessible(true);
+		maxField.setAccessible(true);
+		var display = orderer.itemDisplay;
+		int max = maxField.getInt(display);
+		int start = pageField.getInt(display);
+		orderer.keyPressed(GLFW.GLFW_KEY_PAGE_DOWN, 0, 0);
+		int down = pageField.getInt(display);
+		orderer.keyPressed(GLFW.GLFW_KEY_PAGE_UP, 0, 0);
+		int up = pageField.getInt(display);
+		orderer.keyPressed(GLFW.GLFW_KEY_PAGE_UP, 0, 0);
+		int wrap = pageField.getInt(display);
+		result("orderer.pageKeys", max > 0 && start == 0 && down == 1 && up == 0 && wrap == max,
+				"max=" + max + " start=" + start + " pgdn=" + down + " pgup=" + up + " wrap=" + wrap);
 		mc.setScreen(null);
 	}
 
