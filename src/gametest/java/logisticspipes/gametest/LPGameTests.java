@@ -29,6 +29,7 @@ import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.inventory.CraftingContainer;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
 import net.minecraftforge.gametest.GameTestHolder;
@@ -119,6 +120,21 @@ public class LPGameTests {
 		boolean released = SimpleServiceLocator.routerManager.getRouter(id) == null;
 		helper.assertTrue(kept && released, "kept after unload=" + kept + " released after invalidate=" + released);
 		helper.succeed();
+	}
+
+	/** A vanilla chest placed or broken next to a pipe updates its adjacent inventories within a few ticks, not at the 30s re-scan. */
+	@GameTest(template = "empty")
+	public static void chestNeighbourRefreshesAdjacent(GameTestHelper helper) {
+		CoreRoutedPipe pipe = (CoreRoutedPipe) placeBasicPipe(helper).pipe;
+		BlockPos chest = PIPE.east();
+		helper.startSequence()
+				.thenExecuteAfter(5, () -> helper.setBlock(chest, Blocks.CHEST))
+				.thenExecuteAfter(3, () -> helper.assertTrue(pipe.getAvailableAdjacent().inventories().size() == 1,
+						"after place: " + pipe.getAvailableAdjacent().inventories()))
+				.thenExecute(() -> helper.destroyBlock(chest))
+				.thenExecuteAfter(3, () -> helper.assertTrue(pipe.getAvailableAdjacent().inventories().isEmpty(),
+						"after break: " + pipe.getAvailableAdjacent().inventories()))
+				.thenSucceed();
 	}
 
 	/** Worklog item 2: the reset recipe returns one clean item per matching stack (LP1). */
