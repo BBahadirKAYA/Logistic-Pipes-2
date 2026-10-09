@@ -82,7 +82,9 @@ public class MainProxy {
 				|| (thr instanceof RoutingTableDebugUpdateThread)) {
 			return LogicalSide.SERVER;
 		}
-		// ComputerCraft Lua-thread check removed — CC has no 1.20.1 port (former dummy always returned false).
+		if (SimpleServiceLocator.ccProxy.isLuaThread(thr)) {
+			return LogicalSide.SERVER;
+		}
 		return LogicalSide.CLIENT;
 	}
 

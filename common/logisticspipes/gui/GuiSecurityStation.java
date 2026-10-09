@@ -119,8 +119,7 @@ public class GuiSecurityStation extends LogisticsBaseGuiScreen implements Player
 			MainProxy.sendPacketToServer(PacketHandler.getPacket(SecurityRequestCCIdsPacket.class).setBlockPos(_tile.getBlockPos()));
 		});
 		addRenderableWidget(btnEditTable);
-		// ComputerCraft not available on 1.20.1 (former dummy isCC() was always false) — CC widgets only in DEBUG.
-		if (!LogisticsPipes.isDEBUG()) {
+		if (!SimpleServiceLocator.ccProxy.isCC() && !LogisticsPipes.isDEBUG()) {
 			checkAllowCC.visible = false;
 			btnEditTable.visible = false;
 		}
@@ -198,7 +197,7 @@ public class GuiSecurityStation extends LogisticsBaseGuiScreen implements Player
 		super.renderLabels(guiGraphics, par1, par2);
 		guiGraphics.drawString(font, TextUtil.translate(GuiSecurityStation.PREFIX + "SecurityStation"), 105, 10, 0x404040, false);
 		guiGraphics.drawString(font, _tile.getSecId() == null ? "null" : _tile.getSecId().toString(), 32, 25, 0x404040, false);
-		if (LogisticsPipes.isDEBUG()) {
+		if (SimpleServiceLocator.ccProxy.isCC() || LogisticsPipes.isDEBUG()) {
 			guiGraphics.drawString(font, TextUtil.translate(GuiSecurityStation.PREFIX + "allowCCAccess") + ":", 10, 46, 0x404040, false);
 			guiGraphics.drawString(font, TextUtil.translate(GuiSecurityStation.PREFIX + "excludeIDs") + ":", 10, 61, 0x404040, false);
 		}

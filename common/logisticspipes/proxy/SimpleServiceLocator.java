@@ -15,6 +15,7 @@ import logisticspipes.interfaces.routing.IChannelManagerProvider;
 import logisticspipes.logistics.ILogisticsFluidManager;
 import logisticspipes.logistics.ILogisticsManager;
 import logisticspipes.proxy.interfaces.ICCLProxy;
+import logisticspipes.proxy.interfaces.ICCProxy;
 import logisticspipes.proxy.interfaces.ICraftingRecipeProvider;
 import logisticspipes.proxy.interfaces.IPowerProxy;
 import logisticspipes.proxy.progressprovider.MachineProgressProvider;
@@ -127,6 +128,12 @@ public final class SimpleServiceLocator {
 
 	public static void setRenderListHandler(GLRenderListHandler handler) {
 		SimpleServiceLocator.renderListHandler = handler;
+	}
+
+	public static ICCProxy ccProxy = new ICCProxy() {};
+
+	public static void setCCProxy(ICCProxy proxy) {
+		SimpleServiceLocator.ccProxy = proxy;
 	}
 
 	public static IPowerProxy powerProxy;

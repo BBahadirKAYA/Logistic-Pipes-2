@@ -189,6 +189,10 @@ repositories {
         url = 'https://maven.k-4u.nl'
         content { includeGroup 'mcjty.theoneprobe' }
     }
+    maven {
+        url = 'https://maven.squiddev.cc'
+        content { includeGroup 'cc.tweaked' }
+    }
     // Storage Drawers publishes no maven of its own
     maven {
         url = 'https://api.modrinth.com/maven'
@@ -235,6 +239,11 @@ dependencies {
     compileOnly("maven.modrinth:storagedrawers:53npfO5m") {
         transitive = false
     }
+
+    // CC: Tweaked API for the computer peripheral; runtime CC: Tweaked is optional.
+    compileOnly("cc.tweaked:cc-tweaked-1.20.1-core-api:1.120.2") { transitive = false }
+    compileOnly("cc.tweaked:cc-tweaked-1.20.1-common-api:1.120.2") { transitive = false }
+    compileOnly("cc.tweaked:cc-tweaked-1.20.1-forge-api:1.120.2") { transitive = false }
 
     ktlint("com.pinterest:ktlint:0.50.0") {
         attributes {

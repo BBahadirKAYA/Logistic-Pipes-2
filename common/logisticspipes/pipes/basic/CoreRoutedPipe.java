@@ -1374,7 +1374,7 @@ public abstract class CoreRoutedPipe extends CoreUnroutedPipe
 	public void sendMessage(final Double computerId, final Object message) {
 		int sourceId = -1;
 		if (container != null) {
-			sourceId = container.getLastCCID(); // always 0 — ComputerCraft not available on 1.20.1
+			sourceId = container.getLastCCID();
 		}
 		final int fSourceId = sourceId;
 		BitSet set = new BitSet(ServerRouter.getBiggestSimpleID());
@@ -1391,7 +1391,7 @@ public abstract class CoreRoutedPipe extends CoreUnroutedPipe
 	public void sendBroadcast(final String message) {
 		int sourceId = -1;
 		if (container != null) {
-			sourceId = container.getLastCCID(); // always 0 — ComputerCraft not available on 1.20.1
+			sourceId = container.getLastCCID();
 		}
 		final int fSourceId = sourceId;
 		BitSet set = new BitSet(ServerRouter.getBiggestSimpleID());

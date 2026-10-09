@@ -60,6 +60,20 @@ public class CCObjectWrapper {
 		return "";
 	}
 
+	// subclasses such as ItemResource fall back to their registered supertype
+	private static ILPCCTypeDefinition getSpecialMapping(Class<?> clazz) {
+		ILPCCTypeDefinition definition = CCObjectWrapper.specialMappings.get(clazz);
+		if (definition != null) {
+			return definition;
+		}
+		for (Map.Entry<Class<? extends ILPCCTypeHolder>, ILPCCTypeDefinition> entry : CCObjectWrapper.specialMappings.entrySet()) {
+			if (entry.getKey().isAssignableFrom(clazz)) {
+				return entry.getValue();
+			}
+		}
+		return null;
+	}
+
 	public static Object checkForAnnotations(final Object input, final ICommandWrapper wrapper) {
 		if (input == null) {
 			return null;
@@ -68,8 +82,9 @@ public class CCObjectWrapper {
 			return ((ILPCCTypeHolder) input).getCCType();
 		}
 		Object wrapped = input;
-		if (CCObjectWrapper.specialMappings.containsKey(input.getClass())) {
-			wrapped = CCObjectWrapper.specialMappings.get(input.getClass()).getTypeFor(input);
+		ILPCCTypeDefinition special = CCObjectWrapper.getSpecialMapping(input.getClass());
+		if (special != null) {
+			wrapped = special.getTypeFor(input);
 		} else if (input instanceof IItemIdentifierInventory) {
 			if (((IItemIdentifierInventory) input).getMaxStackSize() == 1) {
 				wrapped = new CCFilterInventory((IItemIdentifierInventory) input);

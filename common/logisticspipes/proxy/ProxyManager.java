@@ -1,5 +1,9 @@
 package logisticspipes.proxy;
 
+import net.minecraftforge.fml.ModList;
+
+import logisticspipes.LPConstants;
+import logisticspipes.proxy.cc.CCProxy;
 import logisticspipes.proxy.ccl.CCLProxy;
 
 public class ProxyManager {
@@ -13,5 +17,9 @@ public class ProxyManager {
 		SimpleServiceLocator.configToolHandler.registerWrapper();
 
 		SimpleServiceLocator.setPowerProxy(new PowerProxy());
+
+		if (ModList.get().isLoaded(LPConstants.computerCraftModID)) {
+			SimpleServiceLocator.setCCProxy(new CCProxy());
+		}
 	}
 }

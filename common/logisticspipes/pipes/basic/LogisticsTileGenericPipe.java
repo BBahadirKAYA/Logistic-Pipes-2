@@ -2,11 +2,12 @@ package logisticspipes.pipes.basic;
 
 import java.util.Arrays;
 import java.util.EnumMap;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -119,9 +120,9 @@ public class LogisticsTileGenericPipe extends LPMicroblockTileEntity
 	public Set<DoubleCoordinates> subMultiBlock = new HashSet<>();
 	public boolean[] turtleConnect = new boolean[7];
 	@ModDependentField(modId = LPConstants.computerCraftModID)
-	public HashMap<Object, Direction> connections; // IComputerAccess — CC not ported
+	public Map<Object, Direction> connections; // keys are IComputerAccess
 	@ModDependentField(modId = LPConstants.computerCraftModID)
-	public Object currentPC; // IComputerAccess — CC not ported
+	public Object currentPC; // IComputerAccess
 	@ModDependentField(modId = LPConstants.openComputersModID)
 	public Object node; // was: Node (OC removed from classpath)
 	public LogicController logicController = new LogicController();
@@ -149,6 +150,9 @@ public class LogisticsTileGenericPipe extends LPMicroblockTileEntity
 		Arrays.stream(Direction.values()).forEach(face -> itemInsertionHandlers.put(face, new ItemInsertionHandler(this, face)));
 		ItemInsertionHandler itemInsertionHandlerNull = new ItemInsertionHandler(this, null);
 		renderState = new PipeRenderState();
+		if (SimpleServiceLocator.ccProxy.isCC()) {
+			connections = new ConcurrentHashMap<>();
+		}
 	}
 
 	@Override
@@ -353,9 +357,16 @@ public class LogisticsTileGenericPipe extends LPMicroblockTileEntity
 			pipe.triggerConnectionCheck();
 		}
 		blockNeighborChange = true;
-		// ComputerCraft turtles cannot exist on 1.20.1 — no neighbor is ever a turtle.
+		boolean[] connected = new boolean[6];
+		if (SimpleServiceLocator.ccProxy.isCC() && level != null) {
+			new WorldCoordinatesWrapper(this).allNeighborTileEntities().stream()
+					.filter(adjacent -> SimpleServiceLocator.ccProxy.isTurtle(adjacent.getTileEntity()))
+					.forEach(adjacent -> connected[adjacent.getDirection().ordinal()] = true);
+		}
 		for (int i = 0; i < 6; i++) {
-			turtleConnect[i] = false;
+			if (!connected[i]) {
+				turtleConnect[i] = false;
+			}
 		}
 	}
 
@@ -445,6 +456,13 @@ public class LogisticsTileGenericPipe extends LPMicroblockTileEntity
 			return false;
 		}
 
+		if (SimpleServiceLocator.ccProxy.isTurtle(with)) {
+			final Direction neighborOrientation = OrientationsUtil.getOrientationOfTilewithTile(this, with);
+			if (neighborOrientation == null || !turtleConnect[neighborOrientation.ordinal()]) {
+				return false;
+			}
+		}
+
 		if (with instanceof LogisticsTileGenericPipe) {
 			CoreUnroutedPipe otherPipe = ((LogisticsTileGenericPipe) with).pipe;
 
@@ -460,19 +478,24 @@ public class LogisticsTileGenericPipe extends LPMicroblockTileEntity
 		return pipe.canPipeConnect(with, side);
 	}
 
-	// ComputerCraft is not available on 1.20.1 — these retain the former dummy-proxy semantics.
-	public void queueEvent(String event, Object[] arguments) {}
-
-	public void handleMesssage(int computerId, Object message, int sourceId) {}
-
-	public boolean getTurtleConnect() {
-		return false;
+	public void queueEvent(String event, Object[] arguments) {
+		SimpleServiceLocator.ccProxy.queueEvent(event, arguments, this);
 	}
 
-	public void setTurtleConnect(boolean flag) {}
+	public void handleMesssage(int computerId, Object message, int sourceId) {
+		SimpleServiceLocator.ccProxy.handleMesssage(computerId, message, this, sourceId);
+	}
+
+	public boolean getTurtleConnect() {
+		return SimpleServiceLocator.ccProxy.getTurtleConnect(this);
+	}
+
+	public void setTurtleConnect(boolean flag) {
+		SimpleServiceLocator.ccProxy.setTurtleConnect(flag, this);
+	}
 
 	public int getLastCCID() {
-		return 0;
+		return SimpleServiceLocator.ccProxy.getLastCCID(this);
 	}
 
 	@Nonnull
