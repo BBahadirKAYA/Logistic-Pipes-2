@@ -15,6 +15,7 @@ follows [Semantic Versioning](https://semver.org/) where practical.
 - Side configuration view no longer hides the pipe behind neighbouring blocks.
 - Pipe signs show again, on a wooden board as in LP1.
 - The request monitor's order tree stays inside its window.
+- Search and text fields in LP screens are visible again (orderer search, item picker, settings and more).
 
 ## [0.0.3] - 2026-10-09
 

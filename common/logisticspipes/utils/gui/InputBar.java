@@ -17,6 +17,7 @@ public class InputBar extends EditBox implements LogisticsBaseGuiScreen.EventLis
 	}
 
 	public int minNumber = 0;
+	private final LogisticsBaseGuiScreen screen;
 
 	public InputBar(Font font, LogisticsBaseGuiScreen screen, int left, int top, int width, int height) {
 		this(font, screen, left, top, width, height, true);
@@ -32,6 +33,7 @@ public class InputBar extends EditBox implements LogisticsBaseGuiScreen.EventLis
 
 	public InputBar(Font font, LogisticsBaseGuiScreen screen, int left, int top, int width, int height, boolean isActive, boolean numberOnly, Align align) {
 		super(font, left+2, top, width-4, height-2, Component.empty());
+		this.screen = screen;
 		screen.onGuiEvents.add(this);
 		if (numberOnly) {
 			setFilter((String s) -> {
@@ -120,7 +122,8 @@ public class InputBar extends EditBox implements LogisticsBaseGuiScreen.EventLis
 
 	/** @deprecated Use renderWidget() via parent */
 	public void drawTextBox() {
-		// no-op: rendering handled by addRenderableWidget in 1.20.1
+		// LP1's GuiTextField drew itself here; no screen registers these as widgets
+		render(screen.guiGraphics, 0, 0, 0);
 	}
 
 }

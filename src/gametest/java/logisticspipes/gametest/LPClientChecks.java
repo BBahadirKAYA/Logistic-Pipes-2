@@ -129,7 +129,18 @@ public final class LPClientChecks {
 				case SETTLE_TICKS + 146 -> openMonitor(mc);
 				// two rendered frames so the popup has drawn before the shot
 				case SETTLE_TICKS + 149 -> checkMonitor(mc);
-				case SETTLE_TICKS + 152 -> {
+				case SETTLE_TICKS + 151 -> openItemPicker(mc);
+				case SETTLE_TICKS + 153 -> checkItemPicker(mc);
+				// a frame with the typed text before reading pixels
+				case SETTLE_TICKS + 155 -> checkItemPickerDrawn(mc);
+				case SETTLE_TICKS + 156 -> openDiskPopup(mc);
+				case SETTLE_TICKS + 158 -> checkDiskPopup(mc);
+				case SETTLE_TICKS + 160 -> {
+					Screenshot.grab(mc.gameDirectory, "lpcheck_disk.png", mc.getMainRenderTarget(),
+							msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO disk screenshot: {}", msg.getString()));
+					mc.setScreen(null);
+				}
+				case SETTLE_TICKS + 162 -> {
 					logisticspipes.LogisticsPipes.log.info("LPCHECK DONE failures={}", failures);
 					mc.stop();
 				}
@@ -544,6 +555,97 @@ public final class LPClientChecks {
 	private static java.util.Set<String> treeShots(java.io.File dir) {
 		String[] names = dir.list((d, n) -> n.endsWith(".png") && n.contains("_tree"));
 		return names == null ? new java.util.HashSet<>() : new java.util.HashSet<>(java.util.Arrays.asList(names));
+	}
+
+	private static LogisticsBaseGuiScreen popupHost;
+	private static logisticspipes.gui.popup.SelectItemOutOfList itemPicker;
+	private static logisticspipes.gui.popup.GuiDiskPopup diskPopup;
+
+	private static LogisticsBaseGuiScreen openPopupHost(Minecraft mc) {
+		popupHost = new LogisticsBaseGuiScreen(176, 166, 0, 0) {
+			@Override
+			protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {}
+		};
+		mc.setScreen(popupHost);
+		return popupHost;
+	}
+
+	private static void typeInto(LogisticsBaseGuiScreen host, String text) {
+		for (char c : text.toCharArray()) host.charTyped(c, 0);
+	}
+
+	private static void openItemPicker(Minecraft mc) {
+		var items = new ArrayList<logisticspipes.utils.item.ItemIdentifierStack>();
+		items.add(logisticspipes.utils.item.ItemIdentifierStack.getFromStack(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.IRON_INGOT)));
+		items.add(logisticspipes.utils.item.ItemIdentifierStack.getFromStack(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.OAK_LOG)));
+		itemPicker = new logisticspipes.gui.popup.SelectItemOutOfList(items, slot -> {});
+		openPopupHost(mc).setSubGui(itemPicker);
+	}
+
+	/** The picker's search bar takes focus on click, types through the base screen and filters the list. */
+	private static void checkItemPicker(Minecraft mc) throws ReflectiveOperationException {
+		Field searchField = logisticspipes.gui.popup.SelectItemOutOfList.class.getDeclaredField("search");
+		searchField.setAccessible(true);
+		InputBar search = (InputBar) searchField.get(itemPicker);
+		int left = popupHost.width / 2 - 156 / 2, bottom = popupHost.height / 2 + 188 / 2;
+		popupHost.mouseClicked(left + 20, bottom - 15, 0);
+		typeInto(popupHost, "irn");
+		popupHost.keyPressed(GLFW.GLFW_KEY_BACKSPACE, 0, 0);
+		typeInto(popupHost, "on");
+		String text = search.getText();
+		result("picker.searchTypes", "iron".equals(text), "focused=" + search.isFocused() + " text='" + text + "'");
+		boolean iron = itemPicker.itemSearched(logisticspipes.utils.item.ItemIdentifier.get(net.minecraft.world.item.Items.IRON_INGOT, 0, null));
+		boolean log = itemPicker.itemSearched(logisticspipes.utils.item.ItemIdentifier.get(net.minecraft.world.item.Items.OAK_LOG, 0, null));
+		result("picker.searchFilters", iron && !log, "iron shown=" + iron + " log shown=" + log);
+	}
+
+	/** InputBar.drawTextBox must draw the box: its inner fill is black. */
+	private static void checkItemPickerDrawn(Minecraft mc) {
+		double scale = mc.getWindow().getGuiScale();
+		int left = popupHost.width / 2 - 156 / 2, bottom = popupHost.height / 2 + 188 / 2;
+		int x0 = (int) ((left + 10) * scale), x1 = (int) ((left + 90) * scale);
+		int y0 = (int) ((bottom - 21) * scale), y1 = (int) ((bottom - 11) * scale);
+		int black = 0, total = 0;
+		try (var image = Screenshot.takeScreenshot(mc.getMainRenderTarget())) {
+			for (int y = y0; y < y1; y++) {
+				for (int x = x0; x < x1; x++) {
+					total++;
+					if ((image.getPixelRGBA(x, y) & 0xFFFFFF) == 0) black++;
+				}
+			}
+		}
+		result("picker.searchDrawn", black > total / 2, "black " + black + "/" + total);
+		Screenshot.grab(mc.gameDirectory, "lpcheck_picker.png", mc.getMainRenderTarget(),
+				msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO picker screenshot: {}", msg.getString()));
+		mc.setScreen(null);
+	}
+
+	private static void openDiskPopup(Minecraft mc) {
+		net.minecraft.world.item.ItemStack disk = new net.minecraft.world.item.ItemStack(logisticspipes.LPItems.disk.get());
+		diskPopup = new logisticspipes.gui.popup.GuiDiskPopup(new logisticspipes.interfaces.IDiskProvider() {
+			@Override public net.minecraft.world.item.ItemStack getDisk() { return disk; }
+			@Override public int getX() { return 0; }
+			@Override public int getY() { return 0; }
+			@Override public int getZ() { return 0; }
+			@Override public logisticspipes.utils.gui.ItemDisplay getItemDisplay() { return null; }
+		});
+		openPopupHost(mc).setSubGui(diskPopup);
+	}
+
+	/** Name field: click edits, typing, backspace and the cursor keys work; Enter/ESC/outside click would send a rename. */
+	private static void checkDiskPopup(Minecraft mc) throws ReflectiveOperationException {
+		int left = popupHost.width / 2 - 150 / 2, top = popupHost.height / 2 - 200 / 2;
+		popupHost.mouseClicked(left + 20, top + 35, 0);
+		typeInto(popupHost, "ab");
+		popupHost.keyPressed(GLFW.GLFW_KEY_BACKSPACE, 0, 0);
+		popupHost.keyPressed(GLFW.GLFW_KEY_LEFT, 0, 0);
+		typeInto(popupHost, "x");
+		Field name1 = logisticspipes.gui.popup.GuiDiskPopup.class.getDeclaredField("name1");
+		Field name2 = logisticspipes.gui.popup.GuiDiskPopup.class.getDeclaredField("name2");
+		name1.setAccessible(true);
+		name2.setAccessible(true);
+		String name = name1.get(diskPopup) + "|" + name2.get(diskPopup);
+		result("disk.nameTypes", "Diskx|a".equals(name), "before|after cursor='" + name + "'");
 	}
 
 	/** The HUD renderer must have picked up all three pipes as panels. */
