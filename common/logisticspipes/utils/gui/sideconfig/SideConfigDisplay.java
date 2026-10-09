@@ -290,22 +290,19 @@ public abstract class SideConfigDisplay {
 		MultiBufferSource.BufferSource bufferSource = Minecraft.getInstance().renderBuffers().bufferSource();
 		PoseStack poseStack = new PoseStack();
 
-		for (DoubleCoordinates coord : configurables) {
-			renderBlockAt(coord, blockRenderer, bufferSource, poseStack, false);
-		}
 		if (renderNeighbours) {
 			for (DoubleCoordinates coord : neighbours) {
 				renderBlockAt(coord, blockRenderer, bufferSource, poseStack, true);
-			}
-		}
-		// pipes are ENTITYBLOCK_ANIMATED, only their block entity renderer draws them
-		for (DoubleCoordinates coord : configurables) {
-			renderBlockEntityAt(coord, bufferSource, poseStack, partialTick);
-		}
-		if (renderNeighbours) {
-			for (DoubleCoordinates coord : neighbours) {
 				renderBlockEntityAt(coord, bufferSource, poseStack, partialTick);
 			}
+			bufferSource.endBatch();
+			// LP1 never let a neighbour hide the pipe; block entities have no additive pass, so drop their depth.
+			com.mojang.blaze3d.platform.GlStateManager._clear(0x00000100 /* GL_DEPTH_BUFFER_BIT */, Minecraft.ON_OSX);
+		}
+		for (DoubleCoordinates coord : configurables) {
+			renderBlockAt(coord, blockRenderer, bufferSource, poseStack, false);
+			// pipes are ENTITYBLOCK_ANIMATED, only their block entity renderer draws them
+			renderBlockEntityAt(coord, bufferSource, poseStack, partialTick);
 		}
 		bufferSource.endBatch();
 	}
@@ -317,18 +314,28 @@ public abstract class SideConfigDisplay {
 		if (state.isAir()) return;
 		poseStack.pushPose();
 		poseStack.translate(pos.getX() - origin.x, pos.getY() - origin.y, pos.getZ() - origin.z);
-		RenderType renderType = transparent ? RenderType.translucent() : RenderType.solid();
-		if (transparent) {
-			RenderSystem.enableBlend();
-			RenderSystem.defaultBlendFunc();
-		}
+		RenderType renderType = transparent ? NeighbourType.NEIGHBOUR : RenderType.solid();
 		try {
 			blockRenderer.renderBatched(state, pos, world, poseStack,
 				bufferSource.getBuffer(renderType), false, world.getRandom(), ModelData.EMPTY, null);
 		} catch (Exception ignored) {}
 		poseStack.popPose();
-		if (transparent) {
-			RenderSystem.disableBlend();
+	}
+
+	/** LP1's neighbour pass: additive blend (SRC_ALPHA, ONE), depth tested, no depth write. */
+	private static final class NeighbourType extends RenderType {
+
+		static final RenderType NEIGHBOUR = create("logisticspipes_sideconfig_neighbour", DefaultVertexFormat.BLOCK, VertexFormat.Mode.QUADS, 262144, false, false,
+				CompositeState.builder()
+						.setLightmapState(LIGHTMAP)
+						.setShaderState(RENDERTYPE_TRANSLUCENT_SHADER)
+						.setTextureState(BLOCK_SHEET_MIPPED)
+						.setTransparencyState(LIGHTNING_TRANSPARENCY)
+						.setWriteMaskState(COLOR_WRITE)
+						.createCompositeState(false));
+
+		private NeighbourType() {
+			super("", DefaultVertexFormat.BLOCK, VertexFormat.Mode.QUADS, 0, false, false, () -> {}, () -> {});
 		}
 	}
 

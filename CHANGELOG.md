@@ -12,6 +12,7 @@ follows [Semantic Versioning](https://semver.org/) where practical.
 - Machine blocks have LP1's hardness and map colour again and need a pickaxe to drop.
 - HUD glasses panels are see-through again with black text, like LP1.
 - HUD glasses panels sit on their block at LP1's size again.
+- Side configuration view no longer hides the pipe behind neighbouring blocks.
 
 ## [0.0.3] - 2026-10-09
 
