@@ -79,10 +79,17 @@ sourceSets {
         compileClasspath += api.output
         runtimeClasspath  += api.output
     }
+    // dev-only checks (GameTests + client check driver); never in the jar
+    gametest {
+        compileClasspath += main.output + api.output
+        runtimeClasspath  += main.output + api.output
+    }
 }
 
 configurations {
     testCompileOnly.extendsFrom compileOnly
+    gametestImplementation.extendsFrom implementation
+    gametestCompileOnly.extendsFrom compileOnly
     ktlint
     // Libraries needed at game runtime in dev (runClient/runServer) that NeoGradle
     // doesn't automatically expose to the ModuleClassLoader from `implementation`.
@@ -138,6 +145,29 @@ runs {
         jvmArguments.add('-ea')
         modSource(sourceSets.api)
         modSource(sourceSets.main)
+        classpath.from(configurations.gameRuntime)
+    }
+    // ./gradlew runGameTestServer: runs every @GameTestHolder("logisticspipes") test, exits non-zero on failure
+    gameTestServer {
+        workingDirectory.set(project.file('run-gametest'))
+        systemProperties.put('forge.enabledGameTestNamespaces', 'logisticspipes')
+        jvmArguments.add('-ea')
+        modSource(sourceSets.api)
+        modSource(sourceSets.main)
+        modSource(sourceSets.gametest)
+        classpath.from(configurations.gameRuntime)
+    }
+    // ./gradlew runClientCheck: joins "LP Testbed", runs the client checks, logs LPCHECK lines, quits
+    clientCheck {
+        configureFromTypeWithName(false)
+        configure('client')
+        workingDirectory.set(project.file('run'))
+        systemProperties.put('lp.clientcheck', 'true')
+        programArguments.addAll('--quickPlaySingleplayer', 'LP Testbed')
+        jvmArguments.add('-ea')
+        modSource(sourceSets.api)
+        modSource(sourceSets.main)
+        modSource(sourceSets.gametest)
         classpath.from(configurations.gameRuntime)
     }
 }

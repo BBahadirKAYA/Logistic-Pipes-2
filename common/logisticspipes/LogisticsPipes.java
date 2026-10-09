@@ -241,6 +241,14 @@ public class LogisticsPipes {
 			modEventBus.addListener(this::registerRenderers);
 			modEventBus.register(logisticspipes.textures.TextureRegistrar.class);
 			modEventBus.register(logisticspipes.renderer.FluidContainerRenderer.class);
+			// dev-only runClientCheck driver from the gametest source set; KFF 4 does not auto-subscribe it
+			if (Boolean.getBoolean("lp.clientcheck")) {
+				try {
+					MinecraftForge.EVENT_BUS.register(Class.forName("logisticspipes.gametest.LPClientChecks"));
+				} catch (ClassNotFoundException e) {
+					log.error("lp.clientcheck is set but the gametest classes are missing", e);
+				}
+			}
 		}
 		LPDataFixer.INSTANCE.init();
 		// Networking is registered during preInit via PacketHandler.registerMessages().
