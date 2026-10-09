@@ -496,6 +496,102 @@ public class LPGameTests {
 	}
 
 	/** Crafting grid without a menu; the list constructor skips the menu's slotsChanged callback. */
+	/** Every single-block pipe survives a chunk unload and cold reload: same type, router id, upgrades and NBT. */
+	@GameTest(template = "empty", timeoutTicks = 600)
+	public static void everyPipeSurvivesColdLoad(GameTestHelper helper) {
+		coldLoadAll(helper, false);
+	}
+
+	/** Same with the router dropped first, as after a server restart: the router UUID must come back from NBT. */
+	@GameTest(template = "empty", timeoutTicks = 600)
+	public static void everyPipeSurvivesRestart(GameTestHelper helper) {
+		coldLoadAll(helper, true);
+	}
+
+	private static void coldLoadAll(GameTestHelper helper, boolean restart) {
+		List<Item> pipes = new ArrayList<>();
+		List<String> skipped = new ArrayList<>();
+		for (Item item : net.minecraft.core.registries.BuiltInRegistries.ITEM) {
+			if (!(item instanceof logisticspipes.items.ItemLogisticsPipe)) continue;
+			CoreUnroutedPipe probe = LogisticsBlockGenericPipe.createPipe(item);
+			if (probe instanceof logisticspipes.pipes.basic.CoreMultiBlockPipe) skipped.add(String.valueOf(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item)));
+			else pipes.add(item);
+		}
+		helper.assertTrue(pipes.size() >= 28, "only " + pipes.size() + " single-block pipes found");
+		List<String> failures = new ArrayList<>();
+		coldLoadStep(helper, pipes, 0, failures, skipped, restart);
+	}
+
+	private static void coldLoadStep(GameTestHelper helper, List<Item> pipes, int index, List<String> failures, List<String> skipped, boolean restart) {
+		if (index >= pipes.size()) {
+			org.apache.logging.log4j.LogManager.getLogger("LPGameTests").info("cold load (restart={}): {} pipes checked, multi-block skipped {}", restart, pipes.size(), skipped);
+			helper.assertTrue(failures.isEmpty(), String.join("; ", failures));
+			helper.succeed();
+			return;
+		}
+		Item item = pipes.get(index);
+		String name = String.valueOf(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item));
+		ServerLevel level = helper.getLevel();
+		BlockPos abs = helper.absolutePos(PIPE);
+		Item speed = logisticspipes.items.ItemUpgrade.getAndCheckUpgrade(LPItems.upgrades.get(logisticspipes.pipes.upgrades.SpeedUpgrade.getName()));
+		CoreUnroutedPipe created = LogisticsBlockGenericPipe.createPipe(item);
+		if (created == null || !LogisticsBlockGenericPipe.placePipe(created, level, abs, LPBlocks.pipe.get())) {
+			failures.add(name + ": place failed");
+			coldLoadStep(helper, pipes, index + 1, failures, skipped, restart);
+			return;
+		}
+		helper.runAfterDelay(3, () -> {
+			if (!(level.getBlockEntity(abs) instanceof LogisticsTileGenericPipe tile) || tile.pipe == null) {
+				failures.add(name + ": no tile after place");
+				level.setBlock(abs, Blocks.AIR.defaultBlockState(), 3);
+				coldLoadStep(helper, pipes, index + 1, failures, skipped, restart);
+				return;
+			}
+			if (tile.pipe instanceof CoreRoutedPipe routed) routed.getOriginalUpgradeManager().inv.setItem(0, new ItemStack(speed));
+			CompoundTag before = tile.saveWithFullMetadata();
+			Class<?> type = tile.pipe.getClass();
+			IRouter router = tile.pipe instanceof CoreRoutedPipe routed ? routed.getRouter() : null;
+			BlockState state = level.getBlockState(abs);
+			tile.onChunkUnloaded();
+			level.removeBlockEntity(abs);
+			if (restart && router != null) router.destroy();
+			// chunk load path: load() with a null level, then setBlockEntity and onLoad on the next tick
+			net.minecraft.world.level.block.entity.BlockEntity reloaded = net.minecraft.world.level.block.entity.BlockEntity.loadStatic(abs, state, before);
+			if (reloaded == null) {
+				failures.add(name + ": loadStatic returned null");
+				level.setBlock(abs, Blocks.AIR.defaultBlockState(), 3);
+				coldLoadStep(helper, pipes, index + 1, failures, skipped, restart);
+				return;
+			}
+			level.setBlockEntity(reloaded);
+			helper.runAfterDelay(3, () -> {
+				if (!(level.getBlockEntity(abs) instanceof LogisticsTileGenericPipe fresh) || fresh.pipe == null) {
+					failures.add(name + ": no pipe after reload");
+				} else {
+					if (fresh.pipe.getClass() != type) failures.add(name + ": type " + fresh.pipe.getClass().getSimpleName());
+					if (!fresh.isInitialized()) failures.add(name + ": not initialized after reload");
+					if (router != null) {
+						CoreRoutedPipe routed = (CoreRoutedPipe) fresh.pipe;
+						if (!routed.getRouter().getId().equals(router.getId())) failures.add(name + ": router uuid " + router.getId() + " -> " + routed.getRouter().getId());
+						if (!restart && routed.getRouter() != router) failures.add(name + ": router replaced on chunk reload");
+						if (!routed.getOriginalUpgradeManager().inv.getItem(0).is(speed)) failures.add(name + ": upgrade lost");
+					}
+					CompoundTag after = fresh.saveWithFullMetadata();
+					if (!after.equals(before)) failures.add(name + ": NBT changed " + tagDiff(before, after));
+				}
+				level.setBlock(abs, Blocks.AIR.defaultBlockState(), 3);
+				coldLoadStep(helper, pipes, index + 1, failures, skipped, restart);
+			});
+		});
+	}
+
+	private static String tagDiff(CompoundTag a, CompoundTag b) {
+		List<String> keys = new ArrayList<>();
+		for (String k : a.getAllKeys()) if (!java.util.Objects.equals(a.get(k), b.get(k))) keys.add(k + "=" + a.get(k) + "->" + b.get(k));
+		for (String k : b.getAllKeys()) if (!a.contains(k)) keys.add("+" + k);
+		return keys.toString();
+	}
+
 	private static CraftingContainer grid(int width, int height, List<ItemStack> items) {
 		NonNullList<ItemStack> list = NonNullList.withSize(width * height, ItemStack.EMPTY);
 		for (int i = 0; i < items.size(); i++) list.set(i, items.get(i));
