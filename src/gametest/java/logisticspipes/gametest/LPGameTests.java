@@ -289,13 +289,25 @@ public class LPGameTests {
 				.get(logisticspipes.blocks.LogisticsProgramCompilerTileEntity.ProgrammCategories.FLUID);
 		for (Item pipe : new Item[] { LPItems.pipeFluidRequest.get(), LPItems.pipeFluidProvider.get(), LPItems.pipeFluidSatellite.get(),
 				LPItems.pipeFluidInsertion.get(), LPItems.pipeFluidExtractor.get() }) {
-			boolean recipe = level.getRecipeManager().getAllRecipesFor(RecipeType.CRAFTING).stream()
-					.anyMatch(r -> r.getResultItem(level.registryAccess()).is(pipe));
-			helper.assertTrue(recipe, "no crafting recipe for " + pipe);
+			CraftingRecipe recipe = level.getRecipeManager().getAllRecipesFor(RecipeType.CRAFTING).stream()
+					.filter(r -> r.getResultItem(level.registryAccess()).is(pipe)).findFirst().orElse(null);
+			helper.assertTrue(recipe != null, "no crafting recipe for " + pipe);
+			// dedicated servers send recipes to the client (and JEI) through the serializer
+			CraftingRecipe synced = networkRoundTrip(recipe);
+			helper.assertTrue(synced.getResultItem(level.registryAccess()).is(pipe)
+					&& synced.getIngredients().size() == recipe.getIngredients().size(), "recipe for " + pipe + " changed over the network");
 			helper.assertTrue(programs != null && programs.contains(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(pipe)),
 					"no FLUID program for " + pipe);
 		}
 		helper.succeed();
+	}
+
+	@SuppressWarnings("unchecked")
+	private static <T extends net.minecraft.world.item.crafting.Recipe<?>> T networkRoundTrip(T recipe) {
+		var serializer = (net.minecraft.world.item.crafting.RecipeSerializer<T>) recipe.getSerializer();
+		var buf = new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+		serializer.toNetwork(buf, recipe);
+		return serializer.fromNetwork(recipe.getId(), buf);
 	}
 
 	/** H2: the creative-tab sink compares against the item's first category tab. */
