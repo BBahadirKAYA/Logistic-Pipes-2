@@ -102,6 +102,13 @@ public final class LPClientChecks {
 				}
 				case SETTLE_TICKS + 56 -> {
 					mc.options.keyShift.setDown(false);
+					startTubes(mc);
+				}
+				// let the client receive and mesh the tube chunks before the shot
+				case SETTLE_TICKS + 86 -> Screenshot.grab(mc.gameDirectory, "lpcheck_tubes.png", mc.getMainRenderTarget(),
+						msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO tubes screenshot: {}", msg.getString()));
+				case SETTLE_TICKS + 87 -> finishTubes(mc);
+				case SETTLE_TICKS + 90 -> {
 					logisticspipes.LogisticsPipes.log.info("LPCHECK DONE failures={}", failures);
 					mc.stop();
 				}
@@ -284,6 +291,79 @@ public final class LPClientChecks {
 			}
 		}
 		result("craftingGui", false, "no crafting pipe loaded");
+	}
+
+	private static BlockPos tubeBase;
+	private static net.minecraft.world.phys.Vec3 tubeReturn;
+
+	/** High-speed curve and gain tubes on a sky platform; the screenshot should show both bending the right way. */
+	private static void startTubes(Minecraft mc) {
+		var server = mc.getSingleplayerServer();
+		if (server == null) {
+			result("tubes.placed", false, "no integrated server");
+			return;
+		}
+		mc.options.pauseOnLostFocus = false;
+		server.execute(() -> {
+			var sp = server.getPlayerList().getPlayer(mc.player.getUUID());
+			if (sp == null) {
+				result("tubes.placed", false, "no server player");
+				return;
+			}
+			tubeReturn = sp.position();
+			tubeBase = sp.blockPosition().above(40);
+			BlockPos b = tubeBase;
+			tubeCommand(sp, "gamemode creative");
+			tubeCommand(sp, "time set noon");
+			tubeCommand(sp, String.format("fill %d %d %d %d %d %d stone", b.getX() - 10, b.getY() - 1, b.getZ() - 10, b.getX() + 10, b.getY() - 1, b.getZ() + 6));
+			tubeCommand(sp, String.format("fill %d %d %d %d %d %d air", b.getX() - 10, b.getY(), b.getZ() - 10, b.getX() + 10, b.getY() + 6, b.getZ() + 6));
+			sp.getAbilities().flying = true;
+			sp.onUpdateAbilities();
+			String curve = placeTube(sp, "pipe_hs_curve", b.offset(-4, 0, 0));
+			String gain = placeTube(sp, "pipe_hs_gain", b.offset(4, 0, 0));
+			result("tubes.placed", curve == null && gain == null, "curve=" + (curve == null ? "ok" : curve) + " gain=" + (gain == null ? "ok" : gain));
+			sp.teleportTo(sp.serverLevel(), b.getX() + 0.5, b.getY() + 5, b.getZ() + 7.5, 180f, 35f);
+		});
+	}
+
+	/** Uses the tube item from {@code stand} on the floor three blocks north, like a player would. */
+	private static String placeTube(net.minecraft.server.level.ServerPlayer sp, String id, BlockPos stand) {
+		var item = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(net.minecraft.resources.ResourceLocation.tryParse("logisticspipes:" + id));
+		var stack = new net.minecraft.world.item.ItemStack(item);
+		if (stack.isEmpty()) return "item missing";
+		sp.teleportTo(sp.serverLevel(), stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5, 180f, 30f);
+		sp.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, stack);
+		BlockPos floor = stand.offset(0, -1, -3);
+		var hit = new BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(floor).add(0, 0.5, 0), Direction.UP, floor, false);
+		var res = stack.useOn(new net.minecraft.world.item.context.UseOnContext(sp, net.minecraft.world.InteractionHand.MAIN_HAND, hit));
+		sp.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, net.minecraft.world.item.ItemStack.EMPTY);
+		for (int dx = -3; dx <= 3; dx++) {
+			for (int dz = -6; dz <= 0; dz++) {
+				if (sp.serverLevel().getBlockEntity(floor.offset(dx, 1, dz)) instanceof LogisticsTileGenericPipe pipe && pipe.pipe != null
+						&& pipe.pipe.getClass().getSimpleName().startsWith("HSTube")) {
+					logisticspipes.LogisticsPipes.log.info("LPCHECK INFO tubes: {} at {} ({})", pipe.pipe.getClass().getSimpleName(), pipe.getBlockPos(), res);
+					return null;
+				}
+			}
+		}
+		return "not placed (" + res + ")";
+	}
+
+	private static void tubeCommand(net.minecraft.server.level.ServerPlayer sp, String command) {
+		sp.server.getCommands().performPrefixedCommand(sp.createCommandSourceStack().withPermission(4).withSuppressedOutput(), command);
+	}
+
+	/** Removes the platform and tubes so the LP Testbed save stays as built. */
+	private static void finishTubes(Minecraft mc) {
+		var server = mc.getSingleplayerServer();
+		if (server == null || tubeBase == null) return;
+		server.execute(() -> {
+			var sp = server.getPlayerList().getPlayer(mc.player.getUUID());
+			if (sp == null) return;
+			BlockPos b = tubeBase;
+			tubeCommand(sp, String.format("fill %d %d %d %d %d %d air", b.getX() - 10, b.getY() - 1, b.getZ() - 10, b.getX() + 10, b.getY() + 6, b.getZ() + 6));
+			sp.teleportTo(sp.serverLevel(), tubeReturn.x, tubeReturn.y, tubeReturn.z, sp.getYRot(), sp.getXRot());
+		});
 	}
 
 	private static List<LogisticsTileGenericPipe> loadedPipes(Minecraft mc) {
