@@ -13,6 +13,9 @@ import net.minecraft.core.Direction;
 
 // CapabilityEnergy removed in NeoForge 1.20.1 — use ForgeCapabilities.EnergyStorage.BLOCK
 import net.minecraftforge.energy.IEnergyStorage;
+import net.minecraftforge.common.util.LazyOptional;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
+import net.minecraftforge.common.capabilities.Capability;
 
 // import buildcraft.api.mj.IMjConnector;
 // import buildcraft.api.mj.IMjReceiver;
@@ -392,9 +395,17 @@ public class LogisticsPowerJunctionTileEntity extends LogisticsSolidTileEntity i
 		return isRemoved();
 	}
 
-	/** Used by RegisterCapabilitiesEvent wiring in LPRegistries. */
 	public net.minecraftforge.energy.IEnergyStorage getEnergyInterface() {
 		return energyInterface;
+	}
+
+	@Nonnull
+	@Override
+	public <T> LazyOptional<T> getCapability(@Nonnull Capability<T> cap, @Nullable Direction side) {
+		if (cap == ForgeCapabilities.ENERGY) {
+			return ForgeCapabilities.ENERGY.orEmpty(cap, LazyOptional.of(() -> energyInterface));
+		}
+		return super.getCapability(cap, side);
 	}
 
 	@Override

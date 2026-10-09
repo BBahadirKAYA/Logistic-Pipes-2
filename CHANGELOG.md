@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/) where practical.
 
+## [Unreleased]
+
+### Fixed
+- The Power Junction accepts Forge Energy from cables and other mods again.
+- Hoppers and other mods can insert into the Logistics Crafting Table.
+
 ## [0.0.3] - 2026-10-09
 
 Bug-fix and feature release for Minecraft 1.20.1 (Forge 47). Same features

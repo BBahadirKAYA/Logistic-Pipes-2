@@ -28,6 +28,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraftforge.event.level.LevelEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.items.wrapper.InvWrapper;
+import net.minecraftforge.common.util.LazyOptional;
+import net.minecraftforge.common.capabilities.Capability;
 
 import logisticspipes.LPBlocks;
 import logisticspipes.api.IRoutedPowerProvider;
@@ -418,9 +420,17 @@ public class LogisticsCraftingTableTileEntity extends LogisticsSolidTileEntity
 		}
 	}
 
-	/** Used by RegisterCapabilitiesEvent wiring in LPRegistries. */
 	public net.minecraftforge.items.IItemHandler getInvWrapper() {
 		return invWrapper;
+	}
+
+	@Nonnull
+	@Override
+	public <T> LazyOptional<T> getCapability(@Nonnull Capability<T> cap, @Nullable Direction side) {
+		if (cap == ForgeCapabilities.ITEM_HANDLER) {
+			return ForgeCapabilities.ITEM_HANDLER.orEmpty(cap, LazyOptional.of(() -> invWrapper));
+		}
+		return super.getCapability(cap, side);
 	}
 
 	@Override
