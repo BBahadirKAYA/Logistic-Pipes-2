@@ -15,6 +15,7 @@ import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.entity.LivingEntity;
@@ -111,7 +112,7 @@ public class LogisticsSolidBlock extends Block implements EntityBlock {
 		// noOcclusion() is required so the BER receives a non-zero packedLight value.
 		// Without it Minecraft treats the block as fully opaque, stores sky-light = 0
 		// at its own position, and the BER renders pitch-black regardless of ambient light.
-		super(BlockBehaviour.Properties.of().strength(6.0F).requiresCorrectToolForDrops().noOcclusion());
+		super(BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(6.0F).requiresCorrectToolForDrops().noOcclusion());
 		this.type = type;
 	}
 

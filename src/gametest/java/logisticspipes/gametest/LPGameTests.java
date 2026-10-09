@@ -199,7 +199,7 @@ public class LPGameTests {
 		helper.succeed();
 	}
 
-	/** LP1 machine blocks: Material.IRON, hardness 6; any pickaxe drops them, a bare hand drops nothing. */
+	/** LP1 machine blocks: Material.IRON (metal map colour), hardness 6; any pickaxe drops them, a bare hand drops nothing. */
 	@GameTest(template = "empty")
 	public static void solidBlocksNeedPickaxe(GameTestHelper helper) {
 		BlockPos pos = new BlockPos(1, 2, 2);
@@ -212,6 +212,7 @@ public class LPGameTests {
 					new net.minecraft.resources.ResourceLocation(LPConstants.LP_MOD_ID, name));
 			BlockState state = block.defaultBlockState();
 			helper.assertTrue(state.getDestroySpeed(helper.getLevel(), abs) == 6.0F, name + " hardness " + state.getDestroySpeed(helper.getLevel(), abs));
+			helper.assertTrue(state.getMapColor(helper.getLevel(), abs) == net.minecraft.world.level.material.MapColor.METAL, name + " map colour not METAL");
 			helper.assertTrue(state.requiresCorrectToolForDrops(), name + " drops without a tool");
 			helper.assertTrue(new ItemStack(Items.WOODEN_PICKAXE).isCorrectToolForDrops(state), name + " not harvestable by a wooden pickaxe");
 			for (boolean pickaxe : new boolean[] { true, false }) {
