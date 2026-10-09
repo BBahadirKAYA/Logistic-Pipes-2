@@ -1,90 +1,60 @@
 package logisticspipes.ticks;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
+import javax.annotation.Nullable;
 
-import lombok.Data;
+import net.minecraftforge.fml.ModList;
+import net.minecraftforge.fml.VersionChecker.CheckResult;
+import net.minecraftforge.fml.VersionChecker.Status;
 
-import logisticspipes.LogisticsPipes;
+import logisticspipes.LPConstants;
 
-public final class VersionChecker implements Callable<VersionChecker.VersionInfo> {
+// reads Forge's update check, fed by updateJSONURL in mods.toml
+public final class VersionChecker {
 
-	private static Future<VersionInfo> versionCheckFuture;
-	private String statusString;
-	private VersionInfo versionInfo = null;
-
-	private VersionChecker() {
-	}
-
-	public static VersionChecker runVersionCheck() {
-		VersionChecker obj = new VersionChecker();
-		versionCheckFuture = LogisticsPipes.singleThreadExecutor.submit(obj);
-		return obj;
+	@Nullable
+	private static CheckResult result() {
+		return ModList.get().getModContainerById(LPConstants.LP_MOD_ID)
+				.map(container -> net.minecraftforge.fml.VersionChecker.getResult(container.getModInfo()))
+				.orElse(null);
 	}
 
 	public String getVersionCheckerStatus() {
-		if (versionCheckFuture != null) {
-			if (versionCheckFuture.isDone()) {
-				// has to be done, before getting final string and setting to null
-				statusString = internalGetVersionCheckerStatus();
-				versionCheckFuture = null;
-			} else {
-				statusString = internalGetVersionCheckerStatus();
-			}
+		CheckResult result = result();
+		if (result == null) {
+			return "Version checking is not available for this Logistics Pipes build.";
 		}
-		return statusString;
+		return switch (result.status()) {
+			case PENDING -> "The version check is not done yet, or it is turned off in config/fml.toml.";
+			case FAILED -> "The version check failed. See the log file for more information.";
+			case OUTDATED, BETA_OUTDATED -> "New Logistics Pipes version found: " + result.target();
+			default -> "You have the newest Logistics Pipes version.";
+		};
 	}
 
-	public boolean isVersionCheckDone() {
-		return versionInfo != null;
+	public boolean isNewVersionAvailable() {
+		CheckResult result = result();
+		return result != null && (result.status() == Status.OUTDATED || result.status() == Status.BETA_OUTDATED);
 	}
 
-	public VersionInfo getVersionInfo() {
-		return versionInfo;
+	public String getNewestVersion() {
+		CheckResult result = result();
+		return result == null || result.target() == null ? "" : result.target().toString();
 	}
 
-	private String internalGetVersionCheckerStatus() {
-		if (versionCheckFuture.isDone()) {
-			try {
-				versionInfo = versionCheckFuture.get();
-				if (versionInfo == null) {
-					if (LogisticsPipes.isDevelopmentEnvironment()) {
-						return "You are running Logistics Pipes from a development environment.";
-					} else {
-						return "Version checking is not available for this Logistics Pipes build.";
-					}
-				} else {
-					if (versionInfo.isNewVersionAvailable()) {
-						return "New Logistics Pipes build found: #" + versionInfo.getNewestBuild();
-					} else {
-						return "You have the newest Logistics Pipes build :)";
-					}
-				}
-			} catch (InterruptedException e) {
-				return "The version check task was interrupted and there is no version information available.";
-			} catch (ExecutionException e) {
-				LogisticsPipes.log.warn("The version check task had an exception while getting the newest version information", e);
-				return "The version check task had an exception. See the log file for more information.";
-			}
-		} else {
-			return "The version check is not yet ready, sorry.";
+	public List<String> getChangelog() {
+		List<String> lines = new ArrayList<>();
+		CheckResult result = result();
+		if (result == null || result.changes() == null) {
+			return lines;
 		}
-	}
-
-	@Override
-	public VersionInfo call() {
-		// LP1's update server (rs485.network) is offline; there is nothing to ask.
-		return null;
-	}
-
-	@Data
-	public static class VersionInfo {
-
-		private boolean newVersionAvailable;
-		private boolean imcMessageSent;
-		private String newestBuild;
-		private List<String> changelog;
+		result.changes().forEach((version, text) -> {
+			lines.add(version + ":");
+			for (String line : text.split("\n")) {
+				lines.add("  " + line);
+			}
+		});
+		return lines;
 	}
 }

@@ -31,7 +31,7 @@ public class VersionCommand implements ICommandHandler {
 		VersionChecker versionChecker = LogisticsPipes.versionChecker;
 		sender.sendSystemMessage(Component.literal(versionChecker.getVersionCheckerStatus()));
 
-		if (versionChecker.isVersionCheckDone() && versionChecker.getVersionInfo().isNewVersionAvailable()) {
+		if (versionChecker.isNewVersionAvailable()) {
 			sender.sendSystemMessage(Component.literal("Use \"/logisticspipes changelog\" to see a changelog."));
 		}
 	}

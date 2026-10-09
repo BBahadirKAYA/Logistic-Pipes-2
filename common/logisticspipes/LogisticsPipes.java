@@ -452,7 +452,7 @@ public class LogisticsPipes {
 
 		FluidIdentifier.initFromForge(false);
 
-		versionChecker = VersionChecker.runVersionCheck();
+		versionChecker = new VersionChecker();
 	}
 
 	@OnlyIn(Dist.CLIENT)

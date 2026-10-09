@@ -314,11 +314,12 @@ public class LogisticsEventListener {
 				}
 
 				VersionChecker checker = LogisticsPipes.versionChecker;
-				String versionMessage = checker.getVersionCheckerStatus();
-
-				if (checker.isVersionCheckDone() && checker.getVersionInfo().isNewVersionAvailable() && !checker.getVersionInfo().isImcMessageSent()) {
-					playerEntity.sendSystemMessage(Component.literal(versionMessage));
-					playerEntity.sendSystemMessage(Component.literal("Use \"/logisticspipes changelog\" to see a changelog."));
+				if (checker.isNewVersionAvailable()) {
+					LocalPlayer player = playerEntity;
+					Minecraft.getInstance().execute(() -> {
+						player.sendSystemMessage(Component.literal(checker.getVersionCheckerStatus()));
+						player.sendSystemMessage(Component.literal("Use \"/logisticspipes changelog\" to see a changelog."));
+					});
 				}
 			});
 		}

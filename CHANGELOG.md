@@ -8,6 +8,7 @@ follows [Semantic Versioning](https://semver.org/) where practical.
 
 ### Added
 - Fluid pipes reach the whole AE2 network's fluids through an ME interface, like item pipes do.
+- Update check: `/lp version`, a chat note on login and the Mods screen show when a newer release is out.
 
 ### Fixed
 - 1.20.1: a pipe next to an AE2 interface no longer crashes the server while the ME network starts up.

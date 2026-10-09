@@ -1,4 +1,7 @@
 package logisticspipes.commands.commands;
+
+import java.util.List;
+
 import net.minecraft.commands.CommandSourceStack;
 
 import net.minecraft.network.chat.Component;
@@ -30,14 +33,13 @@ public class ChangelogCommand implements ICommandHandler {
 		VersionChecker versionChecker = LogisticsPipes.versionChecker;
 		String statusMessage = versionChecker.getVersionCheckerStatus();
 
-		if (versionChecker.isVersionCheckDone() && versionChecker.getVersionInfo().isNewVersionAvailable()) {
-			VersionChecker.VersionInfo versionInfo = versionChecker.getVersionInfo();
-
-			MorePageDisplay display = new MorePageDisplay(new String[] { "(The newest version is #" + versionInfo.getNewestBuild() + ")", "< Changelog Page %/$ >" }, sender);
-			if (versionInfo.getChangelog().isEmpty()) {
-				display.append("No commits since your version.");
+		if (versionChecker.isNewVersionAvailable()) {
+			List<String> changelog = versionChecker.getChangelog();
+			MorePageDisplay display = new MorePageDisplay(new String[] { "(The newest version is " + versionChecker.getNewestVersion() + ")", "< Changelog Page %/$ >" }, sender);
+			if (changelog.isEmpty()) {
+				display.append("No changelog since your version.");
 			} else {
-				versionInfo.getChangelog().forEach(display::append);
+				changelog.forEach(display::append);
 			}
 			display.display(sender);
 		} else {
