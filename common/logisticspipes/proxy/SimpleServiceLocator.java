@@ -17,6 +17,7 @@ import logisticspipes.logistics.ILogisticsManager;
 import logisticspipes.proxy.interfaces.ICCLProxy;
 import logisticspipes.proxy.interfaces.ICCProxy;
 import logisticspipes.proxy.interfaces.ICraftingRecipeProvider;
+import logisticspipes.proxy.interfaces.IEnderStorageProxy;
 import logisticspipes.proxy.interfaces.IPowerProxy;
 import logisticspipes.proxy.progressprovider.MachineProgressProvider;
 import logisticspipes.proxy.specialconnection.SpecialPipeConnection;
@@ -134,6 +135,12 @@ public final class SimpleServiceLocator {
 
 	public static void setCCProxy(ICCProxy proxy) {
 		SimpleServiceLocator.ccProxy = proxy;
+	}
+
+	public static IEnderStorageProxy enderStorageProxy = new IEnderStorageProxy() {};
+
+	public static void setEnderStorageProxy(IEnderStorageProxy proxy) {
+		SimpleServiceLocator.enderStorageProxy = proxy;
 	}
 
 	public static IPowerProxy powerProxy;

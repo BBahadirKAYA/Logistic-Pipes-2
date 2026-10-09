@@ -479,6 +479,34 @@ public class LPGameTests {
 				.thenSucceed();
 	}
 
+	/** Supplier pipe slot finder opens an EnderStorage chest through its tile (LP1 EnderStorageProxy). */
+	@GameTest(template = "empty")
+	public static void slotFinderOpensEnderChest(GameTestHelper helper) {
+		if (!net.minecraftforge.fml.ModList.get().isLoaded(LPConstants.enderStorageModID)) {
+			helper.succeed();
+			return;
+		}
+		placeBasicPipe(helper);
+		helper.setBlock(PIPE.east(), net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(
+				new net.minecraft.resources.ResourceLocation(LPConstants.enderStorageModID, "ender_chest")));
+		ServerPlayer player = net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(helper.getLevel());
+		BlockPos abs = helper.absolutePos(PIPE);
+		helper.runAfterDelay(5, () -> {
+			player.closeContainer();
+			logisticspipes.network.packets.pipe.SlotFinderOpenGuiPacket packet = logisticspipes.network.PacketHandler
+					.getPacket(logisticspipes.network.packets.pipe.SlotFinderOpenGuiPacket.class);
+			packet.setSlot(0);
+			packet.setPosX(abs.getX());
+			packet.setPosY(abs.getY());
+			packet.setPosZ(abs.getZ());
+			packet.processPacket(player);
+			String menu = player.containerMenu.getClass().getName();
+			player.closeContainer();
+			helper.assertTrue(menu.startsWith("codechicken.enderstorage"), "opened " + menu);
+			helper.succeed();
+		});
+	}
+
 	// loaded only when AE2 is present
 	private static final class AE2Fluids {
 		static long insertWater(net.minecraft.world.level.block.entity.BlockEntity tile, long amount) {

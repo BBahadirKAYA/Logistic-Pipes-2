@@ -5,6 +5,7 @@ import net.minecraftforge.fml.ModList;
 import logisticspipes.LPConstants;
 import logisticspipes.proxy.cc.CCProxy;
 import logisticspipes.proxy.ccl.CCLProxy;
+import logisticspipes.proxy.enderchest.EnderStorageProxy;
 
 public class ProxyManager {
 
@@ -20,6 +21,9 @@ public class ProxyManager {
 
 		if (ModList.get().isLoaded(LPConstants.computerCraftModID)) {
 			SimpleServiceLocator.setCCProxy(new CCProxy());
+		}
+		if (ModList.get().isLoaded(LPConstants.enderStorageModID)) {
+			SimpleServiceLocator.setEnderStorageProxy(new EnderStorageProxy());
 		}
 	}
 }

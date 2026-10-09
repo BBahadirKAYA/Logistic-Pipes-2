@@ -14,6 +14,7 @@ public class LPConstants {
 	public static final float BC_PIPE_MAX_POS = 0.75F;
 
 	public static final String computerCraftModID = "computercraft";
+	public static final String enderStorageModID = "enderstorage";
 	public static final String openComputersModID = "opencomputers";
 	public static final String ic2ModID = "ic2";
 	public static final String bcSiliconModID = "buildcraftsilicon";

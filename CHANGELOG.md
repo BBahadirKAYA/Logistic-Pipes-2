@@ -10,6 +10,7 @@ follows [Semantic Versioning](https://semver.org/) where practical.
 - Fluid pipes reach the whole AE2 network's fluids through an ME interface, like item pipes do.
 - Update check: `/lp version`, a chat note on login and the Mods screen show when a newer release is out.
 - ComputerCraft support through CC: Tweaked: pipes and LP blocks are peripherals again, with LP1's Lua commands and events.
+- EnderStorage: the supplier pipe's slot finder opens ender chests next to the pipe.
 
 ### Fixed
 - Computer requests report missing items as resources instead of nil.

@@ -86,7 +86,16 @@ public class SlotFinderOpenGuiPacket extends ModuleCoordinatesPacket {
 							int yCoord = blockPos.getY();
 							int zCoord = blockPos.getZ();
 
-							// EnderStorage check removed — no 1.20.1 port (former dummy isEnderChestBlock was always false).
+							if (SimpleServiceLocator.enderStorageProxy.isEnderChestBlock(block)) {
+								SimpleServiceLocator.enderStorageProxy.openEnderChest(player.level(), blockPos, player);
+								MainProxy.sendPacketToPlayer(PacketHandler.getPacket(SlotFinderActivatePacket.class)
+										.setTargetPosX(xCoord)
+										.setTargetPosY(yCoord)
+										.setTargetPosZ(zCoord)
+										.setSlot(getSlot())
+										.setPacketPos(this), player);
+								return true;
+							}
 
 							net.minecraft.world.phys.BlockHitResult blockHit = new net.minecraft.world.phys.BlockHitResult(
 									new net.minecraft.world.phys.Vec3(blockPos.getX() + 0.5, blockPos.getY() + 0.5, blockPos.getZ() + 0.5),
