@@ -1,35 +1,45 @@
-/*
 package logisticspipes.proxy.specialtankhandler;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import logisticspipes.interfaces.ISpecialTankAccessHandler;
-import logisticspipes.proxy.SimpleServiceLocator;
-import logisticspipes.utils.FluidIdentifier;
+import javax.annotation.Nullable;
 
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.Level;
 
-import net.minecraft.core.Direction;
+import net.minecraftforge.common.capabilities.Capability;
+import net.minecraftforge.common.capabilities.CapabilityManager;
+import net.minecraftforge.common.capabilities.CapabilityToken;
 import net.minecraftforge.fluids.FluidStack;
 
-import appeng.api.AEApi;
 import appeng.api.config.Actionable;
 import appeng.api.networking.IGrid;
-import appeng.api.networking.IGridBlock;
-import appeng.api.networking.IGridHost;
 import appeng.api.networking.IGridNode;
+import appeng.api.networking.IInWorldGridNodeHost;
 import appeng.api.networking.security.IActionHost;
-import appeng.api.storage.IMEMonitor;
-import appeng.api.storage.IStorageMonitorable;
-import appeng.api.storage.data.IAEFluidStack;
-import appeng.api.util.AECableType;
-import appeng.api.util.DimensionalCoord;
+import appeng.api.networking.security.IActionSource;
+import appeng.api.stacks.AEFluidKey;
+import appeng.api.stacks.AEKey;
+import appeng.api.storage.MEStorage;
+import it.unimi.dsi.fastutil.objects.Object2LongMap;
+
+import logisticspipes.interfaces.ISpecialTankAccessHandler;
+import logisticspipes.utils.FluidIdentifier;
 
 public class AETankHandler implements ISpecialTankAccessHandler {
+
+	// same capability as AEInterfaceInventoryHandler
+	private static final Capability<MEStorage> ME_STORAGE = CapabilityManager.get(new CapabilityToken<>() {});
+
+	@Nullable
+	private static MEStorage getStorage(@Nullable BlockEntity tile) {
+		return tile == null ? null : tile.getCapability(ME_STORAGE, null).orElse(null);
+	}
+
+	private static IActionSource source(BlockEntity tile) {
+		return tile instanceof IActionHost host ? IActionSource.ofMachine(host) : IActionSource.empty();
+	}
 
 	@Override
 	public boolean init() {
@@ -38,129 +48,56 @@ public class AETankHandler implements ISpecialTankAccessHandler {
 
 	@Override
 	public boolean isType(BlockEntity tile) {
-		return tile instanceof ITileStorageMonitorable && tile instanceof IGridHost;
+		return getStorage(tile) != null;
 	}
 
 	@Override
 	public List<BlockEntity> getBaseTilesFor(BlockEntity tile) {
 		List<BlockEntity> tiles = new ArrayList<>(1);
-		if (tile instanceof IGridHost) {
-			IGridHost host = (IGridHost) tile;
-			IGridNode node = host.getGridNode(null);
-			if (node != null) {
-				BlockEntity base = getBaseTileEntity(node);
-				if (base != null) {
-					tiles.add(base);
-					return tiles;
-				}
-			}
-		}
-		tiles.add(tile);
+		BlockEntity base = getBaseTileEntity(tile);
+		tiles.add(base != null ? base : tile);
 		return tiles;
 	}
 
-	@SuppressWarnings("unused")
 	@Override
 	public Map<FluidIdentifier, Long> getAvailableLiquid(BlockEntity tile) {
 		Map<FluidIdentifier, Long> map = new HashMap<>();
-		if (tile instanceof ITileStorageMonitorable) {
-			ITileStorageMonitorable mon = (ITileStorageMonitorable) tile;
-			if (mon == null) {
-				return map;
-			}
-			for (Direction dir : Direction.values()) {
-				MachineSource source = new MachineSource(new LPActionHost(((IGridHost) tile).getGridNode(dir)));
-				IStorageMonitorable monitor = mon.getMonitorable(dir, source);
-				if (monitor == null || monitor.getFluidInventory() == null) {
-					continue;
-				}
-				IMEMonitor<IAEFluidStack> fluids = monitor.getFluidInventory();
-				for (IAEFluidStack stack : fluids.getStorageList()) {
-					if (SimpleServiceLocator.extraCellsProxy.canSeeFluidInNetwork(stack.getFluid())) {
-						map.put(FluidIdentifier.get(stack.getFluid(), stack.getTag() != null ? stack.getTag().getCompoundTagCopy() : null, null), stack.getStackSize());
-					}
-				}
-				return map;
+		MEStorage storage = getStorage(tile);
+		if (storage == null) {
+			return map;
+		}
+		for (Object2LongMap.Entry<AEKey> entry : storage.getAvailableStacks()) {
+			if (entry.getKey() instanceof AEFluidKey key) {
+				map.merge(FluidIdentifier.get(key.getFluid(), key.copyTag(), null), entry.getLongValue(), Long::sum);
 			}
 		}
 		return map;
 	}
 
-	@SuppressWarnings("unused")
 	@Override
 	public FluidStack drainFrom(BlockEntity tile, FluidIdentifier ident, Integer amount, boolean drain) {
-		if (tile instanceof ITileStorageMonitorable) {
-			ITileStorageMonitorable mon = (ITileStorageMonitorable) tile;
-			if (mon == null) {
-				return null;
-			}
-			for (Direction dir : Direction.values()) {
-				MachineSource source = new MachineSource(new LPActionHost(((IGridHost) tile).getGridNode(dir)));
-				IStorageMonitorable monitor = mon.getMonitorable(dir, source);
-				if (monitor == null || monitor.getFluidInventory() == null) {
-					continue;
-				}
-				IMEMonitor<IAEFluidStack> fluids = monitor.getFluidInventory();
-				IAEFluidStack s = AEApi.instance().storage().createFluidStack(ident.makeFluidStack(amount));
-				IAEFluidStack extracted = fluids.extractItems(s, drain ? Actionable.MODULATE : Actionable.SIMULATE, source);
-				if (extracted == null) {
-					return null;
-				}
-				return extracted.getFluidStack();
-			}
+		MEStorage storage = getStorage(tile);
+		FluidStack wanted = ident.makeFluidStack(amount);
+		if (storage == null || wanted == null || wanted.isEmpty()) {
+			return null;
 		}
-		return null;
+		AEFluidKey key = AEFluidKey.of(wanted);
+		long extracted = storage.extract(key, amount, drain ? Actionable.MODULATE : Actionable.SIMULATE, source(tile));
+		if (extracted <= 0) {
+			return null;
+		}
+		return key.toStack((int) Math.min(extracted, Integer.MAX_VALUE));
 	}
 
-	private BlockEntity getBaseTileEntity(IGridNode node) {
-		IGrid grid = node.getGrid();
-		if (grid == null) {
+	// the grid pivot stands in for every interface on one network
+	@Nullable
+	private static BlockEntity getBaseTileEntity(BlockEntity tile) {
+		if (!(tile instanceof IInWorldGridNodeHost host)) {
 			return null;
 		}
-		IGridNode pivot = grid.getPivot();
-		if (pivot == null) {
-			return null;
-		}
-		IGridBlock block = pivot.getGridBlock();
-		if (block == null) {
-			return null;
-		}
-		DimensionalCoord coord = block.getLocation();
-		if (coord == null) {
-			return null;
-		}
-		Level world = coord.getWorld();
-		if (world == null) {
-			return null;
-		}
-		return world.getBlockEntity(coord.x, coord.y, coord.z);
-	}
-
-	private class LPActionHost implements IActionHost {
-
-		public IGridNode node;
-
-		public LPActionHost(IGridNode node) {
-			this.node = node;
-		}
-
-		@Override
-		public void securityBreak() {}
-
-		@Override
-		public IGridNode getGridNode(Direction paramDirection) {
-			return null;
-		}
-
-		@Override
-		public AECableType getCableConnectionType(Direction paramDirection) {
-			return null;
-		}
-
-		@Override
-		public IGridNode getActionableNode() {
-			return node;
-		}
+		IGridNode node = host.getGridNode(null);
+		IGrid grid = node == null ? null : node.getGrid();
+		IGridNode pivot = grid == null ? null : grid.getPivot();
+		return pivot != null && pivot.getOwner() instanceof BlockEntity base ? base : null;
 	}
 }
-*/

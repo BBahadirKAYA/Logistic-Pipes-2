@@ -54,9 +54,10 @@ public class AEInterfaceInventoryHandler extends SpecialInventoryHandler impleme
 		hideOne = false;
 	}
 
+	// orElse, not resolve: AE2 hands out a null supplier until the grid boots
 	@Nullable
 	private static MEStorage getStorage(@Nonnull BlockEntity tile, @Nullable Direction dir) {
-		return tile.getCapability(ME_STORAGE, dir).resolve().orElse(null);
+		return tile.getCapability(ME_STORAGE, dir).orElse(null);
 	}
 
 	// unconfigured interfaces expose the whole network, configured ones their own slots

@@ -60,7 +60,7 @@ class StorageDrawersProxyImpl : SpecialInventoryHandler.Factory {
         private val drawerGroupCapability: Capability<IDrawerGroup> = CapabilityManager.get(object : CapabilityToken<IDrawerGroup>() {})
 
         private fun drawerGroup(tile: BlockEntity): IDrawerGroup? =
-            tile.getCapability(drawerGroupCapability, null).resolve().orElse(null)
+            tile.getCapability(drawerGroupCapability, null).orElse(null)
     }
 
     override fun isType(tile: BlockEntity, dir: Direction?): Boolean = drawerGroup(tile) != null

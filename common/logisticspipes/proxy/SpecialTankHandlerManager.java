@@ -1,13 +1,17 @@
 package logisticspipes.proxy;
 
+import net.minecraftforge.fml.ModList;
+
+import static logisticspipes.LPConstants.appliedenergisticsModID;
+
+import logisticspipes.proxy.specialtankhandler.AETankHandler;
+
 public class SpecialTankHandlerManager {
 
 	public static void load() {
-		/*if (Loader.isModLoaded("BuildCraft|Factory")) {
-			SimpleServiceLocator.specialTankHandler.registerHandler(new BuildCraftTankHandler());
-		}
-		if (Loader.isModLoaded("AppliedEnergistics2-Core") || Loader.isModLoaded("appliedenergistics2-core")) {
+		// BuildCraft tank handler removed: no 1.20.1 port exists.
+		if (ModList.get().isLoaded(appliedenergisticsModID)) {
 			SimpleServiceLocator.specialTankHandler.registerHandler(new AETankHandler());
-		}*/
+		}
 	}
 }

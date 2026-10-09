@@ -439,6 +439,58 @@ public class LPGameTests {
 				.thenSucceed();
 	}
 
+	/** AE2 compat: fluid pipes see and drain the network's fluids through an ME interface (LP1 AETankHandler). */
+	@GameTest(template = "empty", timeoutTicks = 200)
+	public static void aeInterfaceExposesNetworkFluids(GameTestHelper helper) {
+		if (!net.minecraftforge.fml.ModList.get().isLoaded(LPConstants.appliedenergisticsModID)) {
+			helper.succeed();
+			return;
+		}
+		BlockPos cell = new BlockPos(0, 2, 1), drive = new BlockPos(1, 2, 1), iface = new BlockPos(2, 2, 1);
+		helper.setBlock(cell, aeBlock("creative_energy_cell"));
+		helper.setBlock(drive, aeBlock("drive"));
+		helper.setBlock(iface, aeBlock("interface"));
+		net.minecraftforge.items.IItemHandler driveInv = helper.getBlockEntity(drive)
+				.getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.ITEM_HANDLER).orElse(null);
+		helper.assertTrue(driveInv != null, "drive has no item handler");
+		ItemStack storageCell = new ItemStack(net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
+				new net.minecraft.resources.ResourceLocation(LPConstants.appliedenergisticsModID, "fluid_storage_cell_1k")));
+		helper.assertTrue(driveInv.insertItem(0, storageCell, false).isEmpty(), "drive refused the fluid cell");
+
+		logisticspipes.utils.FluidIdentifier water = logisticspipes.utils.FluidIdentifier.get(
+				new net.minecraftforge.fluids.FluidStack(net.minecraft.world.level.material.Fluids.WATER, 1));
+		helper.startSequence()
+				.thenWaitUntil(() -> helper.assertTrue(AE2Fluids.insertWater(helper.getBlockEntity(iface), 5000) == 5000, "network not ready"))
+				.thenExecute(() -> {
+					net.minecraft.world.level.block.entity.BlockEntity tile = helper.getBlockEntity(iface);
+					logisticspipes.interfaces.ITankUtil util = logisticspipes.pipes.PipeFluidUtil.INSTANCE.getTankUtilForTE(tile, net.minecraft.core.Direction.WEST);
+					helper.assertTrue(util instanceof logisticspipes.interfaces.ISpecialTankUtil, "tank util " + util);
+					logisticspipes.interfaces.ISpecialTankAccessHandler handler = ((logisticspipes.interfaces.ISpecialTankUtil) util).getSpecialHandler();
+					helper.assertTrue(Long.valueOf(5000).equals(handler.getAvailableLiquid(tile).get(water)), "available " + handler.getAvailableLiquid(tile));
+					net.minecraftforge.fluids.FluidStack simulated = handler.drainFrom(tile, water, 2000, false);
+					helper.assertTrue(simulated != null && simulated.getAmount() == 2000, "simulated drain " + simulated);
+					helper.assertTrue(Long.valueOf(5000).equals(handler.getAvailableLiquid(tile).get(water)), "simulated drain removed fluid");
+					net.minecraftforge.fluids.FluidStack drained = handler.drainFrom(tile, water, 2000, true);
+					helper.assertTrue(drained != null && drained.getFluid() == net.minecraft.world.level.material.Fluids.WATER && drained.getAmount() == 2000, "drain " + drained);
+					helper.assertTrue(Long.valueOf(3000).equals(handler.getAvailableLiquid(tile).get(water)), "after drain " + handler.getAvailableLiquid(tile));
+					net.minecraftforge.fluids.FluidStack tooMuch = handler.drainFrom(tile, water, 4000, true);
+					helper.assertTrue(tooMuch != null && tooMuch.getAmount() == 3000, "over-drain " + tooMuch);
+				})
+				.thenSucceed();
+	}
+
+	// loaded only when AE2 is present
+	private static final class AE2Fluids {
+		static long insertWater(net.minecraft.world.level.block.entity.BlockEntity tile, long amount) {
+			appeng.api.storage.MEStorage storage = tile.getCapability(
+					net.minecraftforge.common.capabilities.CapabilityManager.get(new net.minecraftforge.common.capabilities.CapabilityToken<appeng.api.storage.MEStorage>() {}), null)
+					.orElse(null);
+			if (storage == null) return 0;
+			return storage.insert(appeng.api.stacks.AEFluidKey.of(net.minecraft.world.level.material.Fluids.WATER), amount,
+					appeng.api.config.Actionable.MODULATE, appeng.api.networking.security.IActionSource.empty());
+		}
+	}
+
 	@GameTest(template = "empty")
 	public static void storageDrawersHandlerMovesItems(GameTestHelper helper) {
 		if (!net.minecraftforge.fml.ModList.get().isLoaded(LPConstants.storagedrawersModID)) {
