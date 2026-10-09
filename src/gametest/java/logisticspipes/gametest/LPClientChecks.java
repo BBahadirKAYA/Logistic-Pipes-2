@@ -126,7 +126,10 @@ public final class LPClientChecks {
 				case SETTLE_TICKS + 144 -> Screenshot.grab(mc.gameDirectory, "lpcheck_sign.png", mc.getMainRenderTarget(),
 						msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO sign screenshot: {}", msg.getString()));
 				case SETTLE_TICKS + 145 -> finishTubes(mc);
-				case SETTLE_TICKS + 148 -> {
+				case SETTLE_TICKS + 146 -> openMonitor(mc);
+				// two rendered frames so the popup has drawn before the shot
+				case SETTLE_TICKS + 149 -> checkMonitor(mc);
+				case SETTLE_TICKS + 152 -> {
 					logisticspipes.LogisticsPipes.log.info("LPCHECK DONE failures={}", failures);
 					mc.stop();
 				}
@@ -440,6 +443,107 @@ public final class LPClientChecks {
 		int signs = tubeBase != null && mc.level.getBlockEntity(tubeBase.offset(0, 0, -2)) instanceof LogisticsTileGenericPipe pipe
 				&& pipe.pipe instanceof logisticspipes.pipes.basic.CoreRoutedPipe routed ? routed.getPipeSigns().size() : -1;
 		result("sign.client", signs == 1, "signs=" + signs);
+	}
+
+	private static LogisticsBaseGuiScreen monitorHost;
+	private static logisticspipes.gui.popup.RequestMonitorPopup monitor;
+
+	/** 2026-07-02 batch: request monitor popup over a host screen, with a three-level order tree. */
+	private static void openMonitor(Minecraft mc) {
+		var table = new logisticspipes.pipes.PipeBlockRequestTable(logisticspipes.LPItems.requestTable.get());
+		var root = new logisticspipes.routing.order.LinkedLogisticsOrderList();
+		root.add(monitorOrder(net.minecraft.world.item.Items.CHEST, 4, true));
+		var planks = new logisticspipes.routing.order.LinkedLogisticsOrderList();
+		planks.add(monitorOrder(net.minecraft.world.item.Items.OAK_PLANKS, 32, false));
+		var logs = new logisticspipes.routing.order.LinkedLogisticsOrderList();
+		logs.add(monitorOrder(net.minecraft.world.item.Items.OAK_LOG, 8, false));
+		planks.getSubOrders().add(logs);
+		var iron = new logisticspipes.routing.order.LinkedLogisticsOrderList();
+		iron.add(monitorOrder(net.minecraft.world.item.Items.IRON_INGOT, 2, false));
+		root.getSubOrders().add(planks);
+		root.getSubOrders().add(iron);
+		table.watchedRequests.put(7, new logisticspipes.utils.tuples.Pair<>(null, root));
+		monitorHost = new LogisticsBaseGuiScreen(176, 166, 0, 0) {
+			@Override
+			protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {}
+		};
+		mc.setScreen(monitorHost);
+		monitor = new logisticspipes.gui.popup.RequestMonitorPopup(table, 7);
+		monitorHost.setSubGui(monitor);
+	}
+
+	private static logisticspipes.routing.order.IOrderInfoProvider monitorOrder(net.minecraft.world.item.Item item, int count, boolean inProgress) {
+		var display = logisticspipes.utils.item.ItemIdentifierStack.getFromStack(new net.minecraft.world.item.ItemStack(item, count));
+		return new logisticspipes.routing.order.IOrderInfoProvider() {
+			public boolean isFinished() { return false; }
+			public logisticspipes.utils.item.ItemIdentifierStack getAsDisplayItem() { return display; }
+			public ResourceType getType() { return inProgress ? ResourceType.CRAFTING : ResourceType.PROVIDER; }
+			public int getRouterId() { return 1; }
+			public boolean isInProgress() { return inProgress; }
+			public boolean isWatched() { return true; }
+			public void setWatched() {}
+			public List<Float> getProgresses() { return List.of(); }
+			public byte getMachineProgress() { return (byte) (inProgress ? 40 : 0); }
+			public logisticspipes.utils.item.ItemIdentifier getTargetType() { return null; }
+			public network.rs485.logisticspipes.world.DoubleCoordinates getTargetPosition() { return null; }
+		};
+	}
+
+	/** Popup drew, wheel zooms, drag pans, Save as Image writes a tree PNG, ESC closes only the popup. */
+	private static void checkMonitor(Minecraft mc) throws ReflectiveOperationException, java.io.IOException {
+		Screenshot.grab(mc.gameDirectory, "lpcheck_monitor.png", mc.getMainRenderTarget(),
+				msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO monitor screenshot: {}", msg.getString()));
+		boolean drawn = monitorHost.hasSubGui() && monitor.getGuiGraphics() != null;
+		result("monitor.drawn", drawn, "open=" + monitorHost.hasSubGui() + " rendered=" + (monitor.getGuiGraphics() != null));
+
+		double cx = monitorHost.width / 2.0, cy = monitorHost.height / 2.0;
+		Field zoomField = logisticspipes.gui.popup.RequestMonitorPopup.class.getDeclaredField("zoom");
+		zoomField.setAccessible(true);
+		Object zoomBefore = zoomField.get(monitor);
+		monitorHost.mouseScrolled(cx, cy, -1);
+		Object zoomAfter = zoomField.get(monitor);
+		result("monitor.wheelZoom", zoomBefore != zoomAfter, zoomBefore + " -> " + zoomAfter);
+
+		Field mapXField = logisticspipes.gui.popup.RequestMonitorPopup.class.getDeclaredField("guiMapX");
+		mapXField.setAccessible(true);
+		double mapBefore = mapXField.getDouble(monitor);
+		monitorHost.mouseDragged(cx, cy, 0, 10, 0);
+		double mapAfter = mapXField.getDouble(monitor);
+		result("monitor.dragPan", mapAfter != mapBefore, "guiMapX " + mapBefore + " -> " + mapAfter);
+
+		java.io.File shots = new java.io.File(mc.gameDirectory, "screenshots");
+		java.util.Set<String> before = treeShots(shots);
+		boolean clicked = monitorHost.mouseClicked(cx + 50, cy + 84, 0);
+		java.util.Set<String> added = treeShots(shots);
+		added.removeAll(before);
+		String png = "none";
+		boolean drawnTree = false;
+		if (added.size() == 1) {
+			png = added.iterator().next();
+			try (var in = new java.io.FileInputStream(new java.io.File(shots, png));
+					var image = com.mojang.blaze3d.platform.NativeImage.read(in)) {
+				int clear = image.getPixelRGBA(0, 0), other = 0;
+				for (int y = 0; y < image.getHeight(); y++) {
+					for (int x = 0; x < image.getWidth(); x++) {
+						if (image.getPixelRGBA(x, y) != clear) other++;
+					}
+				}
+				drawnTree = other > 500;
+				png += " " + image.getWidth() + "x" + image.getHeight() + " drawnPixels=" + other;
+			}
+		}
+		result("monitor.savePng", clicked && drawnTree, "clicked=" + clicked + " png=" + png);
+
+		monitorHost.keyPressed(GLFW.GLFW_KEY_ESCAPE, 0, 0);
+		boolean popupClosed = !monitorHost.hasSubGui();
+		boolean hostOpen = mc.screen == monitorHost;
+		mc.setScreen(null);
+		result("monitor.escClosesPopupOnly", popupClosed && hostOpen, "popupClosed=" + popupClosed + " hostOpen=" + hostOpen);
+	}
+
+	private static java.util.Set<String> treeShots(java.io.File dir) {
+		String[] names = dir.list((d, n) -> n.endsWith(".png") && n.contains("_tree"));
+		return names == null ? new java.util.HashSet<>() : new java.util.HashSet<>(java.util.Arrays.asList(names));
 	}
 
 	/** The HUD renderer must have picked up all three pipes as panels. */

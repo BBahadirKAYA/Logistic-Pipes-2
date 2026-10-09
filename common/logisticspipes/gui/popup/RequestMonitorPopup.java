@@ -306,6 +306,8 @@ public class RequestMonitorPopup extends SubGuiScreen {
 
 		RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
 		getGuiGraphics().blit(RequestMonitorPopup.achievementTextures, leftSide, topSide, 0.0f, 0.0f, xSize, ySize, 256, 256);
+		// LP1 masked the map to the frame's hole with depth; clip to it instead
+		getGuiGraphics().enableScissor(leftSide + 22, topSide + 23, leftSide + 234, topSide + 164);
 
 		guiTop *= 1 / zoom.zoom;
 		guiLeft *= 1 / zoom.zoom;
@@ -340,6 +342,7 @@ public class RequestMonitorPopup extends SubGuiScreen {
 			getGuiGraphics().drawString(minecraft.font, s, innerLeftSide - mapX + 111 - minecraft.font.width(s) / 2, innerTopSide - mapY - 152, 16777215, true);
 		}
 		renderLinkedOrderListItems(list, innerLeftSide - mapX + 102, innerTopSide - mapY - 180, par1, par2);
+		getGuiGraphics().disableScissor();
 		RenderSystem.enableBlend();
 
 		guiTop *= zoom.zoom;

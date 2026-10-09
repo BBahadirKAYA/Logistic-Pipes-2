@@ -14,6 +14,7 @@ follows [Semantic Versioning](https://semver.org/) where practical.
 - HUD glasses panels sit on their block at LP1's size again.
 - Side configuration view no longer hides the pipe behind neighbouring blocks.
 - Pipe signs show again, on a wooden board as in LP1.
+- The request monitor's order tree stays inside its window.
 
 ## [0.0.3] - 2026-10-09
 
