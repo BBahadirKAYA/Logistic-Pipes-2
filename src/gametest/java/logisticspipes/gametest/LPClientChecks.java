@@ -52,6 +52,8 @@ public final class LPClientChecks {
 	private static int particleBaseline;
 	private static boolean drawHud = false;
 	private static boolean drawFont = false;
+	private static BlockPos blockInfoAt = null;
+	private static final boolean JEI_LOADED = net.minecraftforge.fml.ModList.get().isLoaded(LPConstants.jeiModID);
 	private static final List<IHUDModuleRenderer> hudRenderers = new ArrayList<>();
 
 	private LPClientChecks() {}
@@ -117,8 +119,18 @@ public final class LPClientChecks {
 				case SETTLE_TICKS + 117 -> {
 					checkGlasses();
 					checkHudPower(mc);
+					checkHudBlockInfo(mc);
 					Screenshot.grab(mc.gameDirectory, "lpcheck_glasses.png", mc.getMainRenderTarget(),
 							msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO glasses screenshot: {}", msg.getString()));
+				}
+				case SETTLE_TICKS + 120 -> {
+					if (!JEI_LOADED) {
+						result("hud.blockInfo", blockInfoAt != null, "no JEI: panel render path ran " + (blockInfoAt != null ? "without error" : "and failed"));
+					} else if (blockInfoAt != null) {
+						Screenshot.grab(mc.gameDirectory, "lpcheck_blockinfo.png", mc.getMainRenderTarget(),
+								msg -> logisticspipes.LogisticsPipes.log.info("LPCHECK INFO block info screenshot: {}", msg.getString()));
+					}
+					blockInfoAt = null;
 					mc.options.keyShift.setDown(true);
 				}
 				case SETTLE_TICKS + 122 -> Screenshot.grab(mc.gameDirectory, "lpcheck_glasses_focus.png", mc.getMainRenderTarget(),
@@ -1305,6 +1317,45 @@ public final class LPClientChecks {
 		result("hud.powerLevel", ok, "display=" + renderer.display(config) + " texts=" + texts + " gauge=" + gauge);
 	}
 
+	/** Ctrl-hold block info: JEI tooltip and mod name for the chest, drawn as text plus the item; no panel without JEI. */
+	private static void checkHudBlockInfo(Minecraft mc) throws ReflectiveOperationException {
+		// power junction left of the view; the real render path runs on it for a few frames
+		blockInfoAt = tubeBase.offset(-2, 0, -1);
+		if (!JEI_LOADED) return;
+		var chest = new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.CHEST);
+		List<Component> lines = logisticspipes.modplugins.jei.JEIPluginLoader.getInfo(chest);
+		List<String> texts = new ArrayList<>();
+		List<net.minecraft.world.item.ItemStack> items = new ArrayList<>();
+		var recorder = new GuiGraphics(mc, mc.renderBuffers().bufferSource()) {
+			@Override
+			public int drawString(net.minecraft.client.gui.Font font, Component text, int x, int y, int colour, boolean shadow) {
+				texts.add(text.getString());
+				return 0;
+			}
+
+			@Override
+			public void renderItem(net.minecraft.world.item.ItemStack stack, int x, int y) {
+				items.add(stack);
+			}
+		};
+		var draw = logisticspipes.renderer.LogisticsHUDRenderer.class.getDeclaredMethod("drawBlockInfo", Minecraft.class, net.minecraft.world.item.ItemStack.class, List.class, double.class);
+		draw.setAccessible(true);
+		var previous = SimpleGraphics.guiGraphics;
+		SimpleGraphics.guiGraphics = recorder;
+		int growingTexts;
+		try {
+			draw.invoke(null, mc, chest, lines, 0.5D);
+			growingTexts = texts.size();
+			draw.invoke(null, mc, chest, lines, 1.0D);
+		} finally {
+			SimpleGraphics.guiGraphics = previous;
+		}
+		List<String> expected = lines.stream().map(Component::getString).toList();
+		boolean ok = lines.size() >= 2 && expected.get(0).equals("Chest") && "Minecraft".equals(net.minecraft.ChatFormatting.stripFormatting(expected.get(expected.size() - 1)))
+				&& growingTexts == 0 && texts.equals(expected) && items.size() == 1 && items.get(0).is(net.minecraft.world.item.Items.CHEST);
+		result("hud.blockInfo", ok, "lines=" + expected + " drawn=" + texts + " whileGrowing=" + growingTexts + " items=" + items);
+	}
+
 	private static final String FONT_SAMPLE = "Ag@Q";
 	private static final int FONT_X = 10, FONT_Y = 10, FONT_STEP = 16;
 
@@ -1506,6 +1557,20 @@ public final class LPClientChecks {
 		hudRenderers.add(defaultSide.getHUDRenderer());
 		hudRenderers.add(north.getHUDRenderer());
 		drawHud = true;
+	}
+
+	@SubscribeEvent
+	public static void onRenderLevel(net.minecraftforge.client.event.RenderLevelStageEvent event) {
+		if (!ENABLED || blockInfoAt == null || event.getStage() != net.minecraftforge.client.event.RenderLevelStageEvent.Stage.AFTER_PARTICLES) return;
+		try {
+			var render = logisticspipes.renderer.LogisticsHUDRenderer.class.getDeclaredMethod("renderBlockInfo", BlockHitResult.class, int.class, com.mojang.blaze3d.vertex.PoseStack.class, net.minecraft.client.renderer.MultiBufferSource.class);
+			render.setAccessible(true);
+			var hit = new BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(blockInfoAt), Direction.SOUTH, blockInfoAt, false);
+			render.invoke(logisticspipes.renderer.LogisticsHUDRenderer.instance(), hit, 100, event.getPoseStack(), Minecraft.getInstance().renderBuffers().bufferSource());
+		} catch (ReflectiveOperationException e) {
+			result("hud.blockInfoDrawn", false, e.toString());
+			blockInfoAt = null;
+		}
 	}
 
 	@SubscribeEvent

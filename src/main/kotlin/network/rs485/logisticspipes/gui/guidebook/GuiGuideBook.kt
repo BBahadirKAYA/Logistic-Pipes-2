@@ -117,7 +117,7 @@ class GuiGuideBook(private val state: ItemGuideBook.GuideBookState) : Screen(Com
             }
         }
         fun onItemLinkClick(stack: ItemStack) {
-            JEIPluginLoader.showRecipe(stack)
+            if (net.minecraftforge.fml.ModList.get().isLoaded(logisticspipes.LPConstants.jeiModID)) JEIPluginLoader.showRecipe(stack)
         }
     }
 

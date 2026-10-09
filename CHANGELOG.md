@@ -11,6 +11,7 @@ follows [Semantic Versioning](https://semver.org/) where practical.
 - Update check: `/lp version`, a chat note on login and the Mods screen show when a newer release is out.
 - ComputerCraft support through CC: Tweaked: pipes and LP blocks are peripherals again, with LP1's Lua commands and events.
 - EnderStorage: the supplier pipe's slot finder opens ender chests next to the pipe.
+- HUD glasses: hold Ctrl while looking at a block to see its name, tooltip and mod (needs JEI; LP1 used NEI).
 
 ### Fixed
 - Computer requests report missing items as resources instead of nil.

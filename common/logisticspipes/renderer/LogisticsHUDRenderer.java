@@ -20,9 +20,12 @@ import java.util.List;
 import javax.annotation.Nonnull;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 
 
@@ -40,6 +43,7 @@ import logisticspipes.interfaces.IDebugHUDProvider;
 import logisticspipes.interfaces.IHUDConfig;
 import logisticspipes.interfaces.IHeadUpDisplayBlockRendererProvider;
 import logisticspipes.interfaces.IHeadUpDisplayRendererProvider;
+import logisticspipes.modplugins.jei.JEIPluginLoader;
 import logisticspipes.pipes.basic.CoreRoutedPipe;
 import logisticspipes.proxy.SimpleServiceLocator;
 import logisticspipes.routing.IRouter;
@@ -177,6 +181,7 @@ public class LogisticsHUDRenderer {
 	// LP1's panel size and distance from the block centre toward the viewer.
 	private static final float PANEL_SCALE = 0.01F;
 	private static final float PANEL_OFFSET = 0.4F;
+	private static final boolean JEI_LOADED = net.minecraftforge.fml.ModList.get().isLoaded(logisticspipes.LPConstants.jeiModID);
 
 	//TODO: only load this once, rather than twice
 	private static final ResourceLocation TEXTURE = new ResourceLocation("textures/gui/icons.png");
@@ -327,8 +332,8 @@ public class LogisticsHUDRenderer {
 			} else {
 				progress = Math.max(progress - (2 * Math.max(1, (int) Math.floor((System.currentTimeMillis() - last) / 50.0D))), 0);
 			}
-			if (progress != 0) {
-				// LP1 drew neiProxy info here; its NEI proxy was disabled, so the list was always empty
+			if (progress != 0 && box instanceof BlockHitResult blockHit) {
+				renderBlockInfo(blockHit, progress, poseStack, bufferSource);
 			}
 		} else if (!Screen.hasControlDown()) {
 			progress = 0;
@@ -467,6 +472,73 @@ public class LogisticsHUDRenderer {
 				ggPose.popPose();
 			}
 		}
+	}
+
+	/** LP1's Ctrl-hold panel beside the looked-at block; text comes from JEI (LP1 used NEI). */
+	private void renderBlockInfo(BlockHitResult box, int progress, PoseStack poseStack, MultiBufferSource bufferSource) {
+		Minecraft mc = Minecraft.getInstance();
+		// JEIPluginLoader links JEI types, so it must not load without JEI
+		if (!JEI_LOADED || mc.level == null || mc.player == null || !(bufferSource instanceof MultiBufferSource.BufferSource bs)) return;
+		BlockPos pos = box.getBlockPos();
+		ItemStack stack = mc.level.getBlockState(pos).getCloneItemStack(box, mc.level, pos, mc.player);
+		List<Component> textData = JEIPluginLoader.getInfo(stack);
+		if (textData.isEmpty()) return;
+		net.minecraft.world.phys.Vec3 cam = mc.gameRenderer.getMainCamera().getPosition();
+		double x = pos.getX() + 0.5D - cam.x;
+		double y = pos.getY() + 0.5D - cam.y;
+		double z = pos.getZ() + 0.5D - cam.z;
+		// LP1 measured the tilt from the feet
+		double feetY = y + mc.player.getEyeHeight();
+		double dProgress = progress / 100D;
+		net.minecraft.client.gui.GuiGraphics gg = new net.minecraft.client.gui.GuiGraphics(mc, bs);
+		PoseStack ggPose = gg.pose();
+		ggPose.pushPose();
+		ggPose.mulPoseMatrix(poseStack.last().pose());
+		ggPose.translate((float) x, (float) y, (float) z);
+		ggPose.mulPose(new Quaternionf().rotationX((float) Math.toRadians(90.0F)));
+		ggPose.mulPose(new Quaternionf().rotationZ((float) Math.toRadians(getAngle(z, x) + 110F)));
+		ggPose.mulPose(new Quaternionf().rotationX((float) Math.toRadians((-1) * getAngle(Math.hypot(x + 0.8, z + 0.8), feetY + 0.5) + 180)));
+		ggPose.translate((float) (0.4D * dProgress + 0.6D), (float) (-0.2D * dProgress - 0.6D), 0.0F);
+		ggPose.scale(0.01F, 0.01F, -0.0001F);
+		net.minecraft.client.gui.GuiGraphics previous = logisticspipes.utils.gui.SimpleGraphics.guiGraphics;
+		logisticspipes.utils.gui.SimpleGraphics.guiGraphics = gg;
+		RenderSystem.disableDepthTest();
+		RenderSystem.enableBlend();
+		RenderSystem.defaultBlendFunc();
+		try {
+			drawBlockInfo(mc, stack, textData, dProgress);
+			gg.flush();
+		} finally {
+			RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+			RenderSystem.enableDepthTest();
+			logisticspipes.utils.gui.SimpleGraphics.guiGraphics = previous;
+			ggPose.popPose();
+		}
+	}
+
+	/** Draws the panel into SimpleGraphics.guiGraphics, origin at its centre. */
+	private static void drawBlockInfo(Minecraft mc, ItemStack stack, List<Component> textData, double dProgress) {
+		net.minecraft.client.gui.GuiGraphics gg = logisticspipes.utils.gui.SimpleGraphics.guiGraphics;
+		int heigth = Math.max(32, 10 * textData.size() + 15);
+		int width = 0;
+		for (Component s : textData) {
+			width = Math.max(width, mc.font.width(s) + 22);
+		}
+		width = Math.max(32, width + 15);
+		int left = (int) ((-0.5 * (width - 32)) * dProgress) - 16;
+		int top = (int) ((-0.5 * (heigth - 32)) * dProgress) - 16;
+		RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 96 / 127F);
+		LPGuiGraphics.drawGuiBackGround(mc, left, top, (int) ((0.5 * (width - 32)) * dProgress) + 16, (int) ((0.5 * (heigth - 32)) * dProgress) + 16, 0, false);
+		RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+		if (dProgress < 1.0D) return;
+		gg.pose().pushPose();
+		gg.pose().translate(left, top, 0.0F);
+		for (int i = 0; i < textData.size(); i++) {
+			gg.drawString(mc.font, textData.get(i), 28, 8 + i * 10, 0x000000, false);
+		}
+		gg.pose().scale(1.5F * 0.8F, 1.5F * 0.8F, 1.0F);
+		gg.renderItem(stack, 5, 6);
+		gg.pose().popPose();
 	}
 
 	private float getAngle(double x, double y) {

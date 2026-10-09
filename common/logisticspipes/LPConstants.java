@@ -30,5 +30,6 @@ public class LPConstants {
 	public static final String appliedenergisticsModID = "ae2";
 	public static final String storagedrawersModID = "storagedrawers";
 	public static final String theOneProbeModID = "theoneprobe";
+	public static final String jeiModID = "jei";
 
 }
