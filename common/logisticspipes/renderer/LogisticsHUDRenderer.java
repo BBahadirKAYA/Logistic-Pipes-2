@@ -174,9 +174,9 @@ public class LogisticsHUDRenderer {
 
 	private boolean displayCross = false;
 
-	// LP1 drew panels at scale 0.01 offset 0.4 from the pipe; shrunk and pushed clear of the pipe's block.
-	private static final float PANEL_SCALE = 0.008F;
-	private static final float PANEL_OFFSET = 0.75F;
+	// LP1's panel size and distance from the block centre toward the viewer.
+	private static final float PANEL_SCALE = 0.01F;
+	private static final float PANEL_OFFSET = 0.4F;
 
 	//TODO: only load this once, rather than twice
 	private static final ResourceLocation TEXTURE = new ResourceLocation("textures/gui/icons.png");
