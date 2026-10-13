@@ -6,6 +6,11 @@ follows [Semantic Versioning](https://semver.org/) where practical.
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-10-13
+
+Last feature release for Minecraft 1.20.1 (Forge 47, runs on Forge and
+NeoForge). Work continues on 1.21.1.
+
 ### Added
 - Fluid pipes reach the whole AE2 network's fluids through an ME interface, like item pipes do.
 - Update check: `/lp version`, a chat note on login and the Mods screen show when a newer release is out.
