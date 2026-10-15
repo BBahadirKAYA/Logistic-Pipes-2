@@ -89,6 +89,7 @@ public class GuiRequestTable extends LogisticsBaseGuiScreen implements IItemSear
 
 	public GuiRequestTable(Player entityPlayer, PipeBlockRequestTable table) {
 		super(buildDummy(entityPlayer, table), 410, 240, 0, 0);
+		((DummyContainer) this.menu).guiHolderForJEI = this;
 		_table = table;
 		_entityPlayer = entityPlayer;
 		if (GuiOrderer.cachetime + 100 < System.currentTimeMillis()) {

@@ -8,6 +8,7 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.registration.IGuiHandlerRegistration;
+import mezz.jei.api.registration.IRecipeTransferRegistration;
 import mezz.jei.api.runtime.IJeiRuntime;
 
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -25,6 +26,13 @@ public class LPJEIPlugin implements IModPlugin {
     @Override
     public ResourceLocation getPluginUid() {
         return PLUGIN_ID;
+    }
+
+    @Override
+    public void registerRecipeTransferHandlers(IRecipeTransferRegistration registration) {
+        registration.addRecipeTransferHandler(
+                new RecipeTransferHandler(registration.getTransferHelper()),
+                mezz.jei.api.constants.RecipeTypes.CRAFTING);
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
