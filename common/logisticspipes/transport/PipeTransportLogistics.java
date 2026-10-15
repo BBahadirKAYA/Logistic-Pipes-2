@@ -305,7 +305,45 @@ public class PipeTransportLogistics {
 			}
 		}
 		if (dirs.isEmpty()) {
-			return new RoutingResult(null, false);
+			// The caller has already transferred ownership of the traveling item to
+			// this pipe. Rejecting it here makes the previous pipe remove the item
+			// while this pipe stores nothing, effectively voiding the stack. A dead
+			// end must bounce the item back instead.
+			return new RoutingResult(data.input.getOpposite(), true);
+		}
+
+		// Unrouted pipes used to choose a random exit. At a T-junction this can
+		// send a routed item around a loop indefinitely, even though the item
+		// still carries a valid destination. Follow the shortest reachable path
+		// to that destination when possible; retain random routing for ordinary
+		// destination-less items and as a safe fallback for a rebuilding network.
+		if (data.getDestination() >= 0 && data.getItemIdentifierStack() != null) {
+			Direction bestDirection = null;
+			double bestDistance = Double.MAX_VALUE;
+			for (Direction dir : dirs) {
+				BlockEntity tile = CoordinateUtils.add(getPipe().getLPPosition(), dir).getTileEntity(getWorld());
+				IPipeInformationProvider information = SimpleServiceLocator.pipeInformationManager.getInformationProviderFor(tile);
+				if (information == null) {
+					continue;
+				}
+				List<DoubleCoordinates> visited = new ArrayList<>();
+				visited.add(getPipe().getLPPosition());
+				double distance = information.getDistanceTo(
+						data.getDestination(),
+						dir.getOpposite(),
+						data.getItemIdentifierStack().getItem(),
+						data.getTransportMode() == TransportMode.Active,
+						0,
+						bestDistance,
+						visited);
+				if (distance < bestDistance) {
+					bestDistance = distance;
+					bestDirection = dir;
+				}
+			}
+			if (bestDirection != null && bestDistance < Integer.MAX_VALUE) {
+				return new RoutingResult(bestDirection, true);
+			}
 		}
 		int num = new Random().nextInt(dirs.size());
 		return new RoutingResult(dirs.get(num), true);
