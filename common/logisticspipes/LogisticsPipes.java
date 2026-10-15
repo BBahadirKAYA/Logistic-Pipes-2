@@ -386,6 +386,7 @@ public class LogisticsPipes {
 				RenderTickHandler sub = new RenderTickHandler();
 				MinecraftForge.EVENT_BUS.register(sub);
 				MinecraftForge.EVENT_BUS.register(network.rs485.logisticspipes.gui.WidgetScreenHudSuppressor.INSTANCE);
+				MinecraftForge.EVENT_BUS.register(network.rs485.logisticspipes.gui.LPTooltipBoundaryHandler.INSTANCE);
 				SimpleServiceLocator.setClientPacketBufferHandlerThread(new ClientPacketBufferHandlerThread());
 				LPFontRenderer.Factory.asyncPreload();
 
