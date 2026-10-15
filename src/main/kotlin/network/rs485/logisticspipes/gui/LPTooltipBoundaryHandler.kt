@@ -8,18 +8,22 @@
 package network.rs485.logisticspipes.gui
 
 import logisticspipes.LPConstants
+import logisticspipes.gui.orderer.GuiRequestTable
+import net.minecraft.client.Minecraft
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraftforge.client.event.RenderTooltipEvent
 import net.minecraftforge.eventbus.api.EventPriority
 import net.minecraftforge.eventbus.api.SubscribeEvent
 
-/** Keeps LP item tooltips clear of the right edge, including tooltips drawn by JEI. */
+/** Keeps LP item tooltips clear of the right edge in the wide Request Table screen. */
 object LPTooltipBoundaryHandler {
 
     private const val RIGHT_EDGE_SAFETY_MARGIN = 32
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     fun onRenderTooltip(event: RenderTooltipEvent.Pre) {
+        if (Minecraft.getInstance().screen !is GuiRequestTable) return
+
         val itemId = BuiltInRegistries.ITEM.getKey(event.itemStack.item)
         if (itemId.namespace != LPConstants.LP_MOD_ID) return
 
