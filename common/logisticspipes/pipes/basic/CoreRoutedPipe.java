@@ -883,6 +883,17 @@ public abstract class CoreRoutedPipe extends CoreUnroutedPipe
 
 		if (entityplayer.getItemBySlot(EquipmentSlot.MAINHAND).isEmpty()) {
 			if (!entityplayer.isCrouching()) {
+				final LogisticsModule module = getLogisticsModule();
+				if (module instanceof Gui) {
+					if (MainProxy.isServer(entityplayer.level())) {
+						if (settings == null || settings.openGui) {
+							Gui.getPipeGuiProvider((Gui) module).setTilePos(container).open(entityplayer);
+						} else {
+							entityplayer.sendSystemMessage(Component.translatable("lp.chat.permissiondenied"));
+						}
+					}
+					return true;
+				}
 				return false;
 			}
 			/*
