@@ -6,6 +6,7 @@ import java.util.List;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
@@ -48,6 +49,7 @@ import logisticspipes.pipes.basic.LogisticsBlockGenericPipe;
 import logisticspipes.pipes.basic.LogisticsTileGenericPipe;
 import logisticspipes.routing.channels.ChannelInformation;
 import logisticspipes.routing.channels.ChannelManager;
+import logisticspipes.transport.LPTravelingItem.LPTravelingItemServer;
 import logisticspipes.utils.CraftingUtil;
 import logisticspipes.utils.PlayerIdentifier;
 import logisticspipes.utils.item.ItemIdentifier;
@@ -67,6 +69,46 @@ public class LPGameTests {
 		helper.assertTrue(LogisticsBlockGenericPipe.placePipe(pipe, helper.getLevel(), abs, LPBlocks.pipe.get()), "placePipe failed");
 		if (!(helper.getLevel().getBlockEntity(abs) instanceof LogisticsTileGenericPipe tile)) {
 			throw new net.minecraft.gametest.framework.GameTestAssertException("no pipe block entity at " + abs);
+		}
+		return tile;
+	}
+
+	/** Regression: an unrouted dead end accepted an item, then stored nothing and silently voided it. */
+	@GameTest(template = "empty", timeoutTicks = 80)
+	public static void unroutedDeadEndBouncesWithoutLosingItem(GameTestHelper helper) {
+		LogisticsTileGenericPipe first = placeUnroutedPipe(helper, new BlockPos(2, 2, 2));
+		LogisticsTileGenericPipe second = placeUnroutedPipe(helper, new BlockPos(3, 2, 2));
+		LPTravelingItemServer item = SimpleServiceLocator.routedItemHelper.createNewTravelItem(new ItemStack(Items.DIAMOND, 7));
+		first.pipe.transport.injectItem(item, Direction.EAST);
+
+		helper.runAfterDelay(40, () -> {
+			int[] totals = new int[2];
+			for (logisticspipes.transport.LPTravelingItem traveling : first.pipe.transport.items) {
+				totals[0]++;
+				totals[1] += traveling.getItemIdentifierStack().getStackSize();
+			}
+			for (logisticspipes.transport.LPTravelingItem traveling : second.pipe.transport.items) {
+				totals[0]++;
+				totals[1] += traveling.getItemIdentifierStack().getStackSize();
+			}
+			int droppedItems = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+					new AABB(helper.absolutePos(new BlockPos(1, 1, 1)), helper.absolutePos(new BlockPos(5, 4, 4))))
+					.stream().mapToInt(entity -> entity.getItem().getCount()).sum();
+			helper.assertTrue(totals[0] == 1, "expected one traveling stack, found " + totals[0]);
+			helper.assertTrue(totals[1] == 7, "expected seven diamonds in pipes, found " + totals[1]);
+			helper.assertTrue(droppedItems == 0, "diamonds were dropped instead of bounced: " + droppedItems);
+			helper.succeed();
+		});
+	}
+
+	private static LogisticsTileGenericPipe placeUnroutedPipe(GameTestHelper helper, BlockPos relativePos) {
+		BlockPos absolutePos = helper.absolutePos(relativePos);
+		CoreUnroutedPipe pipe = LogisticsBlockGenericPipe.createPipe(LPItems.pipeUnrouted.get());
+		helper.assertTrue(pipe != null, "createPipe returned null for pipe_transport_basic");
+		helper.assertTrue(LogisticsBlockGenericPipe.placePipe(pipe, helper.getLevel(), absolutePos, LPBlocks.pipe.get()),
+				"placePipe failed at " + relativePos);
+		if (!(helper.getLevel().getBlockEntity(absolutePos) instanceof LogisticsTileGenericPipe tile)) {
+			throw new net.minecraft.gametest.framework.GameTestAssertException("no unrouted pipe block entity at " + absolutePos);
 		}
 		return tile;
 	}
