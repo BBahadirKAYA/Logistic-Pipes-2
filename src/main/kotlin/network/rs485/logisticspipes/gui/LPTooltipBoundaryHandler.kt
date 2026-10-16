@@ -17,13 +17,24 @@ import net.minecraftforge.eventbus.api.SubscribeEvent
 /** Keeps item tooltips clear of the right edge in LP request screens. */
 object LPTooltipBoundaryHandler {
 
-    private const val LEFT_OFFSET = 240
+    private const val SCREEN_MARGIN = 4
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     fun onRenderTooltip(event: RenderTooltipEvent.Pre) {
         val screen = Minecraft.getInstance().screen
         if (screen !is GuiOrderer && screen !is GuiRequestTable) return
 
-        event.x = (event.x - LEFT_OFFSET).coerceAtLeast(0)
+        val tooltipWidth = event.components.maxOfOrNull { it.getWidth(event.font) } ?: return
+        val tooltipHeight = event.components.sumOf { it.height } + if (event.components.size > 1) 2 else 0
+        val position = event.tooltipPositioner.positionTooltip(
+            event.screenWidth,
+            event.screenHeight,
+            event.x,
+            event.y,
+            tooltipWidth,
+            tooltipHeight,
+        )
+        val overflow = position.x() + tooltipWidth + SCREEN_MARGIN - event.screenWidth
+        if (overflow > 0) event.x = (event.x - overflow).coerceAtLeast(0)
     }
 }
