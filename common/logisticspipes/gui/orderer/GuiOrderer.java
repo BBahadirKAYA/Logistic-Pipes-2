@@ -154,9 +154,19 @@ public abstract class GuiOrderer extends LogisticsBaseGuiScreen implements IItem
 		if (super.hasSubGui()) {
 			return;
 		}
+	}
+
+	@Override
+	public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTicks) {
+		super.render(guiGraphics, mouseX, mouseY, partialTicks);
+		if (hasSubGui()) {
+			return;
+		}
 		Object[] tip = itemDisplay != null ? itemDisplay.getToolTip() : null;
 		if (tip != null && tip.length >= 3) {
-			guiGraphics.renderTooltip(minecraft.font, (ItemStack) tip[2], (int) tip[0], (int) tip[1]);
+			// Tooltips use absolute screen coordinates. Drawing this from renderLabels
+			// applies the container translation/scale a second time and moves it far right.
+			guiGraphics.renderTooltip(minecraft.font, (ItemStack) tip[2], mouseX, mouseY);
 		}
 	}
 
