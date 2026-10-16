@@ -17,19 +17,18 @@ import net.minecraftforge.eventbus.api.SubscribeEvent
 /** Keeps item tooltips clear of the right edge in LP request screens. */
 object LPTooltipBoundaryHandler {
 
-    private const val RIGHT_EDGE_SAFETY_MARGIN = 32
+    private const val TOOLTIP_CURSOR_OFFSET = 12
+    private const val RIGHT_EDGE_SAFETY_MARGIN = 4
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     fun onRenderTooltip(event: RenderTooltipEvent.Pre) {
         val screen = Minecraft.getInstance().screen
         if (screen !is GuiOrderer && screen !is GuiRequestTable) return
 
-        // Forge's positioner flips a tooltip at the edge using the measured text width.
-        // Some font/render-scale combinations draw slightly wider than that measurement.
-        // This also affects non-LP items shown in the request screen's JEI panel, so apply
-        // the safety margin to every item tooltip rendered on these screens.
-        if (event.x > event.screenWidth / 2) {
-            event.x = (event.x - RIGHT_EDGE_SAFETY_MARGIN).coerceAtLeast(0)
-        }
+        // Give Forge an anchor that leaves enough room for the actual widest rendered
+        // component. A fixed offset is insufficient for long names and mod-added lines.
+        val tooltipWidth = event.components.maxOfOrNull { it.getWidth(event.font) } ?: return
+        val rightmostSafeAnchor = event.screenWidth - tooltipWidth - TOOLTIP_CURSOR_OFFSET - RIGHT_EDGE_SAFETY_MARGIN
+        event.x = event.x.coerceAtMost(rightmostSafeAnchor).coerceAtLeast(0)
     }
 }
