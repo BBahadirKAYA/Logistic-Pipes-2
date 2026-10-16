@@ -32,6 +32,7 @@ import logisticspipes.utils.gui.DummyContainer;
 import logisticspipes.utils.gui.LPGuiGraphics;
 import logisticspipes.utils.gui.LogisticsBaseGuiScreen;
 import logisticspipes.utils.gui.SmallGuiButton;
+import logisticspipes.utils.gui.UpgradeSlot;
 import logisticspipes.utils.string.StringUtils;
 import network.rs485.logisticspipes.module.Gui;
 import javax.annotation.Nonnull;
@@ -54,6 +55,12 @@ public class GuiChassisPipe extends LogisticsBaseGuiScreen {
 		_moduleInventory = chassis.getModuleInventory();
 		//_previousGui = previousGui;
 		this.hasUpgradeModuleUpgrade = hasUpgradeModuleUpgrade;
+		int upgradeSlotIndex = 0;
+		for (Slot slot : menu.slots) {
+			if (slot instanceof UpgradeSlot && upgradeSlotIndex < upgradeSlots.length) {
+				upgradeSlots[upgradeSlotIndex++] = slot;
+			}
+		}
 
 		int playerInventoryWidth = 162;
 		int playerInventoryHeight = 76;
@@ -101,10 +108,9 @@ public class GuiChassisPipe extends LogisticsBaseGuiScreen {
 				}
 			});
 			moduleConfigButtons.add(addRenderableWidget(cfgBtn));
-			if (_moduleInventory == null) {
-				continue;
+			if (_moduleInventory != null) {
+				updateModuleConfigButtonVisibility(i);
 			}
-			updateModuleConfigButtonVisibility(i);
 
 			if (hasUpgradeModuleUpgrade) {
 				final int idxA = i * 2;
@@ -122,6 +128,10 @@ public class GuiChassisPipe extends LogisticsBaseGuiScreen {
 	}
 
 	private void updateModuleConfigButtonVisibility(int slot) {
+		if (_moduleInventory == null) {
+			moduleConfigButtons.get(slot).visible = false;
+			return;
+		}
 		ItemStack module = _moduleInventory.getItem(slot);
 		LogisticsModule subModule = chassisPipe.getSubModule(slot);
 		if (module.isEmpty() || subModule == null) {
