@@ -96,8 +96,12 @@ public class GuiChassisPipe extends LogisticsBaseGuiScreen {
 		int top = height / 2 - imageHeight / 2;
 
 		moduleConfigButtons.clear();
-		upgradeConfig = new net.minecraft.client.gui.components.Button[chassisPipe.getChassisSize() * 2];
-		for (int i = 0; i < chassisPipe.getChassisSize(); i++) {
+		// The client can receive chassis state updates while this screen is being
+		// initialized. Use one size snapshot so the array and initialization loop
+		// cannot disagree and leave null entries behind.
+		int chassisSize = chassisPipe.getChassisSize();
+		upgradeConfig = new net.minecraft.client.gui.components.Button[chassisSize * 2];
+		for (int i = 0; i < chassisSize; i++) {
 			final int slot = i;
 			SmallGuiButton cfgBtn = new SmallGuiButton(i, left + 5, top + 12 + 20 * i, 10, 10, "!");
 			cfgBtn.setPressListener(b -> {
@@ -155,7 +159,9 @@ public class GuiChassisPipe extends LogisticsBaseGuiScreen {
 		}
 		if (hasUpgradeModuleUpgrade) {
 			for (int i = 0; i < upgradeConfig.length; i++) {
-				upgradeConfig[i].visible = chassisPipe.getModuleUpgradeManager(i / 2).hasGuiUpgrade(i % 2);
+				if (upgradeConfig[i] != null) {
+					upgradeConfig[i].visible = chassisPipe.getModuleUpgradeManager(i / 2).hasGuiUpgrade(i % 2);
+				}
 			}
 		}
 		for (int i = 0; i < chassisPipe.getChassisSize(); i++)
