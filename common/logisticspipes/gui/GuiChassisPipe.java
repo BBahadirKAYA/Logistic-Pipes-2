@@ -100,7 +100,7 @@ public class GuiChassisPipe extends LogisticsBaseGuiScreen {
 		// initialized. Use one size snapshot so the array and initialization loop
 		// cannot disagree and leave null entries behind.
 		int chassisSize = chassisPipe.getChassisSize();
-		upgradeConfig = new net.minecraft.client.gui.components.Button[chassisSize * 2];
+		upgradeConfig = new net.minecraft.client.gui.components.AbstractButton[chassisSize * 2];
 		for (int i = 0; i < chassisSize; i++) {
 			final int slot = i;
 			SmallGuiButton cfgBtn = new SmallGuiButton(i, left + 5, top + 12 + 20 * i, 10, 10, "!");
