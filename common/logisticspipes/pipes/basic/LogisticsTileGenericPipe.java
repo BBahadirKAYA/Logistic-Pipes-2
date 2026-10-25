@@ -863,11 +863,25 @@ public class LogisticsTileGenericPipe extends LPMicroblockTileEntity
 			TileBuffer t = cache[side.ordinal()];
 			t.refresh();
 
-			pipeConnectionsBuffer[side.ordinal()] = canPipeConnect(t.getTile(), side);
+			pipeConnectionsBuffer[side.ordinal()] = canPipeConnect(t.getTile(), side) || canReceiveFromPipez(side);
 			// BuildCraft / Thermal Dynamics do not exist on 1.20.1 — never a BC pipe or TD duct.
 			pipeBCConnectionsBuffer[side.ordinal()] = false;
 			pipeTDConnectionsBuffer[side.ordinal()] = false;
 		}
+	}
+
+	private boolean canReceiveFromPipez(Direction side) {
+		if (!(pipe instanceof CoreRoutedPipe routed)
+				|| pipe.transport instanceof logisticspipes.transport.PipeFluidTransportLogistics
+				|| routed.isSideBlocked(side, false)) {
+			return false;
+		}
+		// Ordinary Pipez segments have no BlockEntity. Inspect the block itself,
+		// rather than inventing an inventory or registering Pipez as part of the LP network.
+		var id = net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(
+				level.getBlockState(getBlockPos().relative(side)).getBlock());
+		return id != null && id.getNamespace().equals("pipez")
+				&& (id.getPath().equals("item_pipe") || id.getPath().equals("universal_pipe"));
 	}
 
 	/** Used by RegisterCapabilitiesEvent wiring in LPRegistries. */

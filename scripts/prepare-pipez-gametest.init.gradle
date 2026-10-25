@@ -1,0 +1,62 @@
+// Optional real-mod integration: remap the production Pipez jar from SRG to Mojmap.
+// gradle -I scripts/prepare-pipez-gametest.init.gradle preparePipezGameTest runGameTestServer
+// Override the local jar path with -PpipezTestJar=/path/to/pipez.jar.
+allprojects { afterEvaluate { p ->
+ tasks.register("preparePipezGameTest") {
+ dependsOn "generateReobfMappings"
+ doLast {
+ def inputJar = p.file(p.findProperty("pipezTestJar") ?: "../instances/Create_x_Mekanism/mods/pipez-forge-1.20.1-1.2.26.jar")
+ def outputJar = p.file("run-gametest/mods/pipez-test.jar")
+        def trCl = new URLClassLoader(
+                configurations.tinyRemapper.files.collect { it.toURI().toURL() } as URL[],
+                ClassLoader.systemClassLoader.parent
+        )
+        def TinyUtils        = trCl.loadClass('net.fabricmc.tinyremapper.TinyUtils')
+        def IMappingProvider = trCl.loadClass('net.fabricmc.tinyremapper.IMappingProvider')
+        def TinyRemapper     = trCl.loadClass('net.fabricmc.tinyremapper.TinyRemapper')
+        def Builder          = trCl.loadClass('net.fabricmc.tinyremapper.TinyRemapper$Builder')
+        def OCP              = trCl.loadClass('net.fabricmc.tinyremapper.OutputConsumerPath')
+        def OCPBuilder       = trCl.loadClass('net.fabricmc.tinyremapper.OutputConsumerPath$Builder')
+        def NonClassCopyMode = trCl.loadClass('net.fabricmc.tinyremapper.NonClassCopyMode')
+
+        def pathArrayClass = ([] as java.nio.file.Path[]).getClass()
+
+        // Mapping provider: tiny v2 written by generateReobfMappings, left=mojmap → right=srg.
+        def provider = TinyUtils.getMethod('createTinyMappingProvider', java.nio.file.Path, String, String)
+                .invoke(null, tinyMappings.toPath(), 'right', 'left')
+
+        def builder = TinyRemapper.getMethod('newRemapper').invoke(null)
+        Builder.getMethod('withMappings', IMappingProvider).invoke(builder, provider)
+        Builder.getMethod('ignoreFieldDesc',        boolean.class).invoke(builder, false)
+        Builder.getMethod('renameInvalidLocals',    boolean.class).invoke(builder, false)
+        Builder.getMethod('resolveMissing',         boolean.class).invoke(builder, true)
+        Builder.getMethod('rebuildSourceFilenames', boolean.class).invoke(builder, true)
+        Builder.getMethod('ignoreConflicts',        boolean.class).invoke(builder, false)
+        def remapper = Builder.getMethod('build').invoke(builder)
+
+        outputJar.parentFile.mkdirs()
+        outputJar.delete()
+        def consumer = OCPBuilder.getConstructor(java.nio.file.Path).newInstance(outputJar.toPath())
+        consumer = OCPBuilder.getMethod('build').invoke(consumer)
+        try {
+            def fixMetaInf = Enum.valueOf(NonClassCopyMode, 'FIX_META_INF')
+            OCP.getMethod('addNonClassFiles', java.nio.file.Path, NonClassCopyMode, TinyRemapper)
+                    .invoke(consumer, inputJar.toPath(), fixMetaInf, remapper)
+
+            // Resolve SRG member inheritance against SRG Minecraft, not the Mojmap dev jar.
+            def srgJar = p.file(p.findProperty("pipezSrgClasspath") ?: "${gradle.gradleUserHomeDir}/caches/forge_gradle/minecraft_user_repo/net/minecraftforge/forge/1.20.1-47.4.23/forge-1.20.1-47.4.23-srg.jar")
+            if (!srgJar.isFile()) throw new GradleException("Supply -PpipezSrgClasspath=/path/to/forge-srg.jar")
+            def cp = [srgJar.toPath()] as java.nio.file.Path[]
+            TinyRemapper.getMethod('readClassPath', pathArrayClass).invoke(remapper, [cp] as Object[])
+
+            def in0 = [inputJar.toPath()] as java.nio.file.Path[]
+            TinyRemapper.getMethod('readInputs', pathArrayClass).invoke(remapper, [in0] as Object[])
+
+            TinyRemapper.getMethod('apply', java.util.function.BiConsumer).invoke(remapper, consumer)
+        } finally {
+            TinyRemapper.getMethod('finish').invoke(remapper)
+            OCP.getMethod('close').invoke(consumer)
+        }
+ }
+ }
+} }

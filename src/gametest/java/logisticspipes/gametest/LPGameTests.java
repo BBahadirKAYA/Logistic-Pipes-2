@@ -73,6 +73,60 @@ public class LPGameTests {
 		return tile;
 	}
 
+	/** Integration regression: Pipez can see our handler but LP rejected its unrecognized input side. */
+	@GameTest(template = "empty", timeoutTicks = 240)
+	public static void pipezItemPipeFeedsBasicLogisticsPipe(GameTestHelper helper) {
+		checkPipezInput(helper, "item_pipe");
+	}
+
+	@GameTest(template = "empty", timeoutTicks = 240)
+	public static void pipezUniversalPipeFeedsBasicLogisticsPipe(GameTestHelper helper) {
+		checkPipezInput(helper, "universal_pipe");
+	}
+
+	private static void checkPipezInput(GameTestHelper helper, String pipeName) {
+		if (!net.minecraftforge.fml.ModList.get().isLoaded("pipez")) {
+			org.apache.logging.log4j.LogManager.getLogger("LPGameTests").info("Pipez integration absent; skipping {}", pipeName);
+			helper.succeed();
+			return;
+		}
+		LogisticsTileGenericPipe lp = placeBasicPipe(helper);
+		((logisticspipes.pipes.PipeItemsBasicLogistics) lp.pipe).getLogisticsModule().setDefaultRoute(true);
+		BlockPos input = new BlockPos(1, 2, 2);
+		BlockPos extractor = new BlockPos(0, 2, 2);
+		BlockPos source = new BlockPos(0, 2, 1);
+		BlockPos destination = new BlockPos(3, 2, 2);
+		var pipeBlock = net.minecraftforge.registries.ForgeRegistries.BLOCKS.getValue(new net.minecraft.resources.ResourceLocation("pipez", pipeName));
+		helper.assertTrue(pipeBlock != null && pipeBlock != Blocks.AIR, "Pipez block missing: " + pipeName);
+		helper.setBlock(input, pipeBlock);
+		helper.setBlock(extractor, pipeBlock);
+		helper.setBlock(source, Blocks.CHEST);
+		helper.setBlock(destination, Blocks.CHEST);
+		helper.setBlock(new BlockPos(2, 2, 3), LPBlocks.powerJunction.get());
+		helper.setBlock(new BlockPos(3, 2, 3), logisticspipes.LPRegistries.CREATIVE_POWER_SOURCE.get());
+		var sourceInventory = (net.minecraft.world.level.block.entity.ChestBlockEntity) helper.getBlockEntity(source);
+		sourceInventory.setItem(0, new ItemStack(Items.DIAMOND, 7));
+		// Reflection keeps the integration optional and out of the production dependency graph.
+		try {
+			pipeBlock.getClass().getMethod("setExtracting", net.minecraft.world.level.Level.class, BlockPos.class, Direction.class, boolean.class)
+					.invoke(pipeBlock, helper.getLevel(), helper.absolutePos(extractor), Direction.NORTH, true);
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Cannot configure Pipez extraction", e);
+		}
+		helper.runAfterDelay(10, () -> {
+			helper.assertTrue(lp.isPipeConnectedCached(Direction.WEST), "LP rejects its Pipez input side");
+		});
+		helper.succeedWhen(() -> {
+			var target = (net.minecraft.world.level.block.entity.ChestBlockEntity) helper.getBlockEntity(destination);
+			int count = 0;
+			for (int slot = 0; slot < target.getContainerSize(); slot++) {
+				if (target.getItem(slot).is(Items.DIAMOND)) count += target.getItem(slot).getCount();
+			}
+			helper.assertTrue(count == 7, "expected seven diamonds delivered through " + pipeName + ", found " + count);
+			helper.assertTrue(sourceInventory.isEmpty(), "source still contains diamonds");
+		});
+	}
+
 	/** Regression: an unrouted dead end accepted an item, then stored nothing and silently voided it. */
 	@GameTest(template = "empty", timeoutTicks = 80)
 	public static void unroutedDeadEndBouncesWithoutLosingItem(GameTestHelper helper) {
