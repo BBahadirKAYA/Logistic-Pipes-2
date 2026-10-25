@@ -310,7 +310,11 @@ public class GuiProgramCompiler extends LogisticsBaseGuiScreen {
 
 	@Override
 	public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-		if (compiler.getCurrentTask() == null && search.keyPressed(keyCode, scanCode, modifiers)) {
+		if (compiler.getCurrentTask() == null && search.isFocused()
+				&& keyCode != org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
+			// Printable keys arrive later in charTyped. Do not let the container
+			// handle inventory, drop, or hotbar shortcuts while entering a search.
+			search.keyPressed(keyCode, scanCode, modifiers);
 			return true;
 		}
 		return super.keyPressed(keyCode, scanCode, modifiers);
