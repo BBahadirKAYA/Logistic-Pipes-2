@@ -630,7 +630,9 @@ public class GuiRequestTable extends LogisticsBaseGuiScreen implements IItemSear
 		if (hasSubGui()) {
 			return super.keyPressed(keyCode, scanCode, modifiers);
 		}
-		if (search.isFocused() && !search.isEmpty() && search.keyPressed(keyCode, scanCode, modifiers)) {
+		if (search.isFocused() && keyCode != org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
+			// Printable keys arrive in charTyped; keep container shortcuts out of search.
+			search.keyPressed(keyCode, scanCode, modifiers);
 			return true;
 		}
 		if (itemDisplay.keyPressed(keyCode, scanCode, modifiers)) {
@@ -659,7 +661,7 @@ public class GuiRequestTable extends LogisticsBaseGuiScreen implements IItemSear
 	@Override
 	public boolean charTyped(char c, int i) {
 		if (search.isFocused()) {
-			if (!search.isEmpty() && search.handleKey(c, i))
+			if (search.handleKey(c, i))
 				return true;
 		} else if (Screen.hasAltDown() && SharedConstants.isAllowedChatCharacter(c)) {
 			itemDisplay.setFocused(false);
