@@ -116,3 +116,7 @@ gradle-app.setting
 *.hprof
 
 # End of https://www.gitignore.io/api/java,gradle,kotlin,forgegradle,intellij+iml
+
+# Local Java toolchains and generated GameTest runtime
+/.toolchains/
+/run-gametest/
