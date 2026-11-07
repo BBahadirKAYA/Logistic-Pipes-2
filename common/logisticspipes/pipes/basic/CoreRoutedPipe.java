@@ -839,6 +839,12 @@ public abstract class CoreRoutedPipe extends CoreUnroutedPipe
 					routerIntId = UUID.fromString(routerId);
 				}
 				router = SimpleServiceLocator.routerManager.getOrCreateRouter(routerIntId, getWorld(), getX(), getY(), getZ());
+				// Persist the actual identity, including a replacement for copied NBT.
+				String actualId = router.getId().toString();
+				if (!actualId.equals(routerId)) {
+					routerId = actualId;
+					container.setChanged();
+				}
 			}
 		}
 		return router;

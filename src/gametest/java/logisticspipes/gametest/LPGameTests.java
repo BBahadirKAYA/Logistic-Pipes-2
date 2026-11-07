@@ -73,6 +73,60 @@ public class LPGameTests {
 		return tile;
 	}
 
+	/** WorldEdit-style full-NBT clones must not share a routing destination. */
+	@GameTest(template = "empty", timeoutTicks = 100)
+	public static void stackedCraftingPipesGetPersistentUniqueRouterIds(GameTestHelper helper) {
+		var level = helper.getLevel();
+		var origin = helper.absolutePos(PIPE);
+		var created = LogisticsBlockGenericPipe.createPipe(LPItems.pipeCrafting.get());
+		helper.assertTrue(LogisticsBlockGenericPipe.placePipe(created, level, origin, LPBlocks.pipe.get()), "place original crafting pipe");
+		helper.runAfterDelay(4, () -> {
+			var original = (LogisticsTileGenericPipe) level.getBlockEntity(origin);
+			var originalRouter = ((CoreRoutedPipe) original.pipe).getRouter();
+			CompoundTag source = original.saveWithFullMetadata();
+			// A real crafting request template, retained when the block is cloned.
+			CompoundTag ingredient = new CompoundTag();
+			ingredient.putInt("index", 0);
+			new ItemStack(Items.IRON_INGOT, 3).save(ingredient);
+			var ingredients = new net.minecraft.nbt.ListTag();
+			ingredients.add(ingredient);
+			source.put("dummyInvitems", ingredients);
+			var copies = new ArrayList<LogisticsTileGenericPipe>();
+			var ids = new java.util.HashSet<java.util.UUID>();
+			ids.add(originalRouter.getId());
+			for (int offset = 1; offset <= 2; offset++) {
+				var pos = origin.offset(offset, 0, 0);
+				level.setBlock(pos, LPBlocks.pipe.get().defaultBlockState(), 3);
+				CompoundTag tag = source.copy();
+				tag.putInt("x", pos.getX()); tag.putInt("y", pos.getY()); tag.putInt("z", pos.getZ());
+				var copy = (LogisticsTileGenericPipe) net.minecraft.world.level.block.entity.BlockEntity.loadStatic(pos, level.getBlockState(pos), tag);
+				helper.assertTrue(copy != null, "load copied crafting pipe");
+				level.setBlockEntity(copy);
+				copies.add(copy);
+			}
+			helper.runAfterDelay(4, () -> {
+				for (var copy : copies) {
+					var routed = (CoreRoutedPipe) copy.pipe;
+					var router = routed.getRouter();
+					helper.assertTrue(ids.add(router.getId()), "copied pipe retained a duplicate UUID");
+					helper.assertTrue(SimpleServiceLocator.routerManager.getIDforUUID(originalRouter.getId()) == originalRouter.getSimpleID(), "original router mapping overwritten");
+					CompoundTag saved = copy.saveWithFullMetadata();
+					helper.assertTrue(saved.getString("routerId").equals(router.getId().toString()), "replacement identity not saved");
+					helper.assertTrue(saved.getList("dummyInvitems", 10).equals(ingredients), "crafting ingredients changed");
+					var pos = copy.getBlockPos();
+					var state = level.getBlockState(pos);
+					copy.onChunkUnloaded();
+					level.removeBlockEntity(pos);
+					router.destroy();
+					var reloaded = (LogisticsTileGenericPipe) net.minecraft.world.level.block.entity.BlockEntity.loadStatic(pos, state, saved);
+					level.setBlockEntity(reloaded);
+					helper.assertTrue(((CoreRoutedPipe) reloaded.pipe).getRouter().getId().equals(router.getId()), "identity changed after save/reload");
+				}
+				helper.succeed();
+			});
+		});
+	}
+
 	/** Integration regression: Pipez can see our handler but LP rejected its unrecognized input side. */
 	@GameTest(template = "empty", timeoutTicks = 240)
 	public static void pipezItemPipeFeedsBasicLogisticsPipe(GameTestHelper helper) {

@@ -87,10 +87,6 @@ public class RouterManager implements IChannelConnectionManager, ISecurityStatio
 	@Nonnull
 	public IRouter getOrCreateRouter(UUID UUid, Level world, int xCoord, int yCoord, int zCoord) {
 		IRouter r;
-		int id = getIDforUUID(UUid);
-		if (id > 0) {
-			getRouter(id);
-		}
 		ResourceLocation dimId = world.dimension().location();
 		if (MainProxy.isClient(world)) {
 			synchronized (_routersClient) {
@@ -107,6 +103,18 @@ public class RouterManager implements IChannelConnectionManager, ISecurityStatio
 				for (IRouter r2 : _routersServer) {
 					if (r2 != null && r2.isAt(dimId, xCoord, yCoord, zCoord)) {
 						return r2;
+					}
+				}
+				// WorldEdit copies routerId along with the pipe's other NBT. A UUID
+				// already registered elsewhere must not replace that router's mapping.
+				if (UUid != null && _uuidMap.containsKey(UUid)) {
+					int existingId = _uuidMap.get(UUid);
+					IRouter existing = existingId >= 0 && existingId < _routersServer.size()
+							? _routersServer.get(existingId) : null;
+					if (existing != null) {
+						do {
+							UUid = UUID.randomUUID();
+						} while (_uuidMap.containsKey(UUid));
 					}
 				}
 				final ServerRouter serverRouter = new ServerRouter(UUid, dimId, xCoord, yCoord, zCoord);
